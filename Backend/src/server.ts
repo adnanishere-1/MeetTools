@@ -22,7 +22,7 @@ async function startServer() {
     const handleShutdown = (signal: string) => {
       logger.info(`${signal} signal received: closing HTTP server gracefully...`);
       server.close(async () => {
-        logger.info('HTTP server closed.');
+        logger.info('HTTP server are closed.');
         // Redis connection bhi close karna acha practice hai
         await redis.quit();
         logger.info('Redis connection are Closed.');
