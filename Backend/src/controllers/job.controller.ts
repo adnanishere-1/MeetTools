@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { STATUS_CODES } from '../utils/statusCodes.js';
-import { imageQueue } from '../queues/index.js';
+import { imageQueue } from '../queues/imageQueue.js';
 
 /**
  * @desc    Get Job Processing Status
