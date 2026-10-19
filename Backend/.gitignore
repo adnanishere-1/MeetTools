@@ -1,0 +1,104 @@
+# ==========================================
+# Dependencies & Package Managers
+# ==========================================
+node_modules/
+.pnpm-store/
+.yarn/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# ==========================================
+# Environment Variables & Secrets (CRITICAL)
+# ==========================================
+.env
+.env*
+!.env.example
+*.env
+*.pem
+*.crt
+*.key
+*.pfx
+
+# ==========================================
+# TypeScript & Build Outputs
+# ==========================================
+# Backend Build Outputs
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Frontend (Next.js) Build Outputs
+.next/
+export/
+
+# ==========================================
+# Logs & Debugging
+# ==========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+pm2.log
+
+# ==========================================
+# Redis & Persistent Temporary Files
+# ==========================================
+dump.rdb
+*.sqlite
+*.db
+
+# ==========================================
+# Multer & Local Upload Repositories
+# ==========================================
+uploads/
+tmp/
+temp/
+.tmp/
+
+# ==========================================
+# Operating System & IDE Files
+# ==========================================
+# macOS
+.DS_Store
+.apple-desktop
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# IDEs & Editors
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ==========================================
+# Testing & Coverage
+# ==========================================
+coverage/
+.nyc_output/
+.jest/
+
+# ==========================================
+# Cache Directories
+# ==========================================
+.cache/
+.eslintcache
+.stylelintcache
+.turbo
