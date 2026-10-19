@@ -17,7 +17,7 @@ app.use(
 );
 
 // Logging HTTP requests
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'Production') {
   app.use(
     morgan('combined', {
       stream: { write: (message) => console.log(message.trim()) },
