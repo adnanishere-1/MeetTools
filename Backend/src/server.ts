@@ -25,7 +25,7 @@ async function startServer() {
         logger.info('HTTP server closed.');
         // Redis connection bhi close karna acha practice hai
         await redis.quit();
-        logger.info('Redis connection are Closed.');
+        logger.info('Redis connection Closed.');
         process.exit(0);
       });
     };
