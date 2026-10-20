@@ -208,3 +208,22 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     },
   });
 });
+
+/**
+ * @desc    Logout user & clear cookie / invalidate session
+ * @route   POST /api/v1/auth/logout
+ * @access  Private
+ */
+export const logout = asyncHandler(async (req: Request, res: Response) => {
+  // Agar aap HttpOnly Cookies use kar rahe hain:
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
+
+  return res.status(STATUS_CODES.OK).json({
+    success: true,
+    message: 'Logged out successfully',
+  });
+});
