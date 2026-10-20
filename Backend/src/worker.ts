@@ -8,7 +8,7 @@ import { connectDB, disconnectDB } from './config/db.js';
 async function startWorker() {
   await connectDB();
 
-  logger.info('🚀 SnapResize Background Worker is starting...');
+  logger.info('🚀 MeetTools Background Worker is starting...');
 
   const worker = new Worker(
     'image-resize-queue',
