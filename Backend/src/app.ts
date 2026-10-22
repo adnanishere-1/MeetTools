@@ -2,8 +2,15 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-//import { errorHandler } from './middlewares/error.middleware.js';
-//import { logger } from './utils/logger.js';
+import { errorHandler } from './middlewares/errorHandler.middleware.js';
+import { logger } from './utils/logger.js';
+
+import authroutes from './routes/auth.routes.js';
+import userroutes from './routes/user.routes.js';
+import imageroutes from './routes/image.routes.js';
+import jobroutes from './routes/job.routes.js';
+import presetroutes from './routes/preset.routes.js';
+import activitylogroutes from './routes/activitylog.routes.js';
 
 const app: Application = express();
 
@@ -16,11 +23,11 @@ app.use(
   })
 );
 
-// Logging HTTP requests
-if (process.env.NODE_ENV === 'Production') {
+// Logging HTTP requests with custom logger
+if (process.env.NODE_ENV === 'production') {
   app.use(
     morgan('combined', {
-      stream: { write: (message) => console.log(message.trim()) },
+      stream: { write: (message) => logger.info(message.trim()) },
     })
   );
 } else {
@@ -31,10 +38,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Base API Routes
-//app.use('/api', routes);
+app.use('/api/v1/auth', authroutes);
+app.use('/api/v1/users', userroutes);
+app.use('/api/v1/images', imageroutes);
+app.use('/api/v1/jobs', jobroutes);
+app.use('/api/v1/presets', presetroutes);
+app.use('/api/v1/activity-logs', activitylogroutes);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
+  logger.info('Health check status requested');
   res.status(200).json({
     success: true,
     status: 'ok',
@@ -44,6 +57,7 @@ app.get('/health', (req: Request, res: Response) => {
 
 // 404 Not Found Handler
 app.use((req: Request, res: Response, next: NextFunction) => {
+  logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     error: {
@@ -54,6 +68,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Global Error Handler Middleware
-//app.use(errorHandler);
+app.use(errorHandler);
 
 export default app;
