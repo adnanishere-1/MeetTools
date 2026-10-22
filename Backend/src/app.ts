@@ -11,7 +11,7 @@ import imageroutes from './routes/image.routes.js';
 import jobroutes from './routes/job.routes.js';
 import presetroutes from './routes/preset.routes.js';
 import activitylogroutes from './routes/activitylog.routes.js';
-
+import adminroutes from './routes/admin.routes.js';
 const app: Application = express();
 
 // Security and utility middlewares
@@ -44,7 +44,7 @@ app.use('/api/v1/images', imageroutes);
 app.use('/api/v1/jobs', jobroutes);
 app.use('/api/v1/presets', presetroutes);
 app.use('/api/v1/activity-logs', activitylogroutes);
-
+app.use('/api/v1/admin', adminroutes);
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
   logger.info('Health check status requested');

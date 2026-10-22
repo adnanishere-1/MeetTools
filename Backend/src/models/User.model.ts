@@ -11,14 +11,13 @@ export interface IUser extends Document {
   otp?: string;
   otpExpiresAt?: Date;
   
-  // Detailed Legal & Data Collection Consent
   consents: {
-    essentialCookies: boolean;   // Functional & auth cookies (Always true)
-    analyticsConsent: boolean;   // Usage tracking
-    marketingConsent: boolean;   // Email updates / promotional
-    termsAndPrivacyAccepted: boolean; // Privacy policy & Terms acceptance
-    consentGivenAt?: Date;      // Timestamp of consent
-    ipAddress?: string;         // IP address during consent (for audit trail)
+    essentialCookies: boolean;
+    analyticsConsent: boolean;
+    marketingConsent: boolean;
+    termsAndPrivacyAccepted: boolean;
+    consentGivenAt?: Date;
+    ipAddress?: string;
   };
 
   createdAt: Date;
@@ -44,7 +43,6 @@ const userSchema = new Schema<IUser>(
     otp: { type: String, select: false },
     otpExpiresAt: { type: Date, select: false },
 
-    // Consent Tracking Schema
     consents: {
       essentialCookies: { type: Boolean, default: true },
       analyticsConsent: { type: Boolean, default: false },

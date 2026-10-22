@@ -1,11 +1,11 @@
 // Sab se pehle dotenv load ho iske liye yeh line likhein
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config(); // Yeh line dotenv ko load karne ke liye hai, isse pehle koi bhi config ya env variable use nahi karna chahiye
 
 import app from './app.js';
 import { connectDB } from './config/db.js';
 import { logger } from './utils/logger.js';
 import { redis } from './config/redis.js'; // Ab yeh sahi waqt par env variables ke sath chalega
-
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {

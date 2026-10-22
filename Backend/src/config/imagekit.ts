@@ -1,6 +1,7 @@
 import ImageKit from 'imagekit';
 import { logger } from '../utils/logger';
-
+import dotenv from 'dotenv';
+dotenv.config(); // Ensure environment variables are loaded before using them
 // Environment variables validation
 const publicKey = process.env.IMAGEKIT_PUBLIC_KEY;
 const privateKey = process.env.IMAGEKIT_PRIVATE_KEY;

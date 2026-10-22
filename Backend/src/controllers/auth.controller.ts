@@ -2,47 +2,43 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.model.js';
+import { ActivityLog } from '../models/ActivityLog.model.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { STATUS_CODES } from '../utils/statusCodes.js';
 import { sendEmail } from '../utils/email.js';
 
-// Helper: 6-Digit OTP generator
 const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-/**
- * @desc    Register new user & send verification OTP
- * @route   POST /api/v1/auth/register
- */
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  const { name, email, password, consents } = req.body;
+  const { name, email, password, consents, adminSecretKey } = req.body;
 
   if (!name || !email || !password) {
     throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Name, email, and password are required');
   }
 
-  // Check if user already exists
   const existingUser = await User.findOne({ email });
   if (existingUser) {
     throw new ApiError(STATUS_CODES.CONFLICT, 'User with this email already exists');
   }
 
-  // Hash Password
   const hashedPassword = await bcrypt.hash(password, 10);
-
-  // Generate 6-digit OTP & 5-minute Expiry
   const otp = generateOTP();
   const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
   const clientIp = (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress) as string;
 
-  // Create User
+  let role: 'user' | 'admin' = 'user';
+  if (adminSecretKey && adminSecretKey === process.env.ADMIN_SECRET_KEY) {
+    role = 'admin';
+  }
+
   const user = await User.create({
     name,
     email,
     password: hashedPassword,
+    role,
     otp,
     otpExpiresAt,
     isEmailVerified: false,
@@ -56,7 +52,13 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     },
   });
 
-  // Send Verification Email
+  await ActivityLog.create({
+    userId: user._id,
+    action: 'USER_REGISTER',
+    details: { role: user.role },
+    ipAddress: clientIp,
+  });
+
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
       <h2>Welcome to MeetTools!</h2>
@@ -79,10 +81,6 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-/**
- * @desc    Verify OTP for email verification
- * @route   POST /api/v1/auth/verify-otp
- */
 export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   const { email, otp } = req.body;
 
@@ -90,7 +88,6 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Email and OTP are required');
   }
 
-  // Fetch user including hidden otp fields
   const user = await User.findOne({ email }).select('+otp +otpExpiresAt');
 
   if (!user) {
@@ -109,7 +106,6 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(STATUS_CODES.UNAUTHORIZED, 'OTP has expired. Please request a new one.');
   }
 
-  // Update user verification status and clear OTP
   user.isEmailVerified = true;
   user.otp = undefined;
   user.otpExpiresAt = undefined;
@@ -121,10 +117,6 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-/**
- * @desc    Resend OTP
- * @route   POST /api/v1/auth/resend-otp
- */
 export const resendOTP = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
 
@@ -167,10 +159,6 @@ export const resendOTP = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-/**
- * @desc    Login user
- * @route   POST /api/v1/auth/login
- */
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
@@ -187,7 +175,15 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(STATUS_CODES.FORBIDDEN, 'Please verify your email before logging in');
   }
 
-  // Generate JWT Access Token
+  const clientIp = (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress) as string;
+
+  await ActivityLog.create({
+    userId: user._id,
+    action: 'USER_LOGIN',
+    details: { email: user.email },
+    ipAddress: clientIp,
+  });
+
   const token = jwt.sign(
     { id: user._id, role: user.role },
     process.env.JWT_SECRET || 'secret',
@@ -209,13 +205,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-/**
- * @desc    Logout user & clear cookie / invalidate session
- * @route   POST /api/v1/auth/logout
- * @access  Private
- */
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  // Agar aap HttpOnly Cookies use kar rahe hain:
   res.clearCookie('token', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

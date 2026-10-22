@@ -14,6 +14,7 @@ export const registerSchema = z.object({
     password: z
       .string({ error: 'Password is required' })
       .min(6, 'Password must be at least 6 characters long'),
+    adminSecretKey: z.string().optional(), // 👈 Yeh add kiya hai taaki admin registration allow ho sake
     consents: z
       .object({
         analyticsConsent: z.boolean().optional(),
