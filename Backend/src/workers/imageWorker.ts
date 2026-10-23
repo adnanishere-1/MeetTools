@@ -1,6 +1,7 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job as BullJob } from 'bullmq';
 import ImageKit from 'imagekit';
 import { logger } from '../utils/logger.js';
+import { redis } from '../config/redis.js';
 
 // ImageKit Instance configuration
 const imagekit = new ImageKit({
@@ -9,35 +10,18 @@ const imagekit = new ImageKit({
   urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || '',
 });
 
-// Redis connection config for BullMQ worker
-const redisConnection = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: Number(process.env.REDIS_PORT) || 6379,
-};
-
-const processImageJob = async (job: Job) => {
-  const { userId, fileId, fileUrl, transformations, taskType } = job.data;
+const processImageJob = async (job: BullJob) => {
+  const { userId, fileId, fileUrl, transformations } = job.data;
   
-  logger.info(`⚙️ Processing job ${job.id} for user ${userId} with task: ${taskType || 'resize'}`);
+  logger.info(`⚙️ Processing job ID: ${job.id} for user/IP: ${userId}`);
 
   try {
-    // Progress update
     await job.updateProgress(20);
 
     let finalOutputUrl = fileUrl;
 
-    // 1. Clean Process (Background removal simulation or metadata stripping via ImageKit)
-    if (taskType === 'clean') {
-      // ImageKit URL transformation for optimization/cleaning
-      finalOutputUrl = imagekit.url({
-        src: fileUrl,
-        transformation: [
-          { quality: '90', format: 'auto' },
-        ],
-      });
-    } 
-    // 2. Resize & Transform Process
-    else if (transformations) {
+    // Resize & Transform Process via ImageKit URL Transformation
+    if (transformations) {
       const transformArray: any = [];
 
       if (transformations.width) transformArray.push({ width: String(transformations.width) });
@@ -45,21 +29,21 @@ const processImageJob = async (job: Job) => {
       if (transformations.quality) transformArray.push({ quality: String(transformations.quality) });
       if (transformations.format) transformArray.push({ format: transformations.format });
 
+      // Agar target file size ki zaroorat ho toh ImageKit transformation handle karegi
       finalOutputUrl = imagekit.url({
         src: fileUrl,
         transformation: transformArray,
       });
     }
 
-    await job.updateProgress(80);
+    await job.updateProgress(100);
 
     logger.info(`✅ Job ${job.id} processed successfully. Output URL: ${finalOutputUrl}`);
 
-    await job.updateProgress(100);
-
+    // Return value jo controller status API mein get hogi
     return {
       success: true,
-      processedUrl: finalOutputUrl,
+      url: finalOutputUrl, // Yeh status API mein previewUrl/downloadUrl ban jayegi
       fileId,
     };
 
@@ -69,16 +53,19 @@ const processImageJob = async (job: Job) => {
   }
 };
 
-// Initialize BullMQ Worker
+// ⚠️ IMPORTANT: Queue name wahi hona chahiye jo aapke controller me use ho raha hai!
+// Agar controller me `resizeQueue` hai, toh queue name check kar lein.
 export const imageWorker = new Worker('meettools-image-queue', processImageJob, {
-  connection: redisConnection,
-  concurrency: 5, // Simultaneous background tasks
+  connection: redis,
+  concurrency: 5,
 });
 
 imageWorker.on('completed', (job) => {
-  logger.info(`🎉 Job ${job.id} has completed successfully.`);
+  logger.info(`🎉 BullMQ Job ${job.id} completed successfully.`);
 });
 
 imageWorker.on('failed', (job, err) => {
-  logger.error(`❌ Job ${job?.id ?? 'unknown'} has failed with error: ${err.message}`);
+  logger.error(`❌ BullMQ Job ${job?.id ?? 'unknown'} failed: ${err.message}`);
 });
+
+logger.info('🚀 MeetTools Image Worker is running and listening for jobs...');

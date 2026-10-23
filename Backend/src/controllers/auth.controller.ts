@@ -25,13 +25,25 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
-  const otp = generateOTP();
-  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
   const clientIp = (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress) as string;
 
+  // Safe Key Matching (Trim karke check karein)
+  const envKey = process.env.ADMIN_SECRET_KEY?.trim();
+  const sentKey = adminSecretKey?.trim();
+
   let role: 'user' | 'admin' = 'user';
-  if (adminSecretKey && adminSecretKey === process.env.ADMIN_SECRET_KEY) {
+  let isEmailVerified = false;
+  let otp: string | undefined = undefined;
+  let otpExpiresAt: Date | undefined = undefined;
+
+  if (sentKey && envKey && sentKey === envKey) {
     role = 'admin';
+    isEmailVerified = true;
+    console.log('✅ Admin Key Matched! Making user an Admin.');
+  } else {
+    console.log('⚠️ Admin Key Not Matched or Missing. Registering as Normal User.');
+    otp = generateOTP();
+    otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
   }
 
   const user = await User.create({
@@ -39,9 +51,9 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     email,
     password: hashedPassword,
     role,
+    isEmailVerified,
     otp,
     otpExpiresAt,
-    isEmailVerified: false,
     consents: {
       essentialCookies: true,
       analyticsConsent: Boolean(consents?.analyticsConsent),
@@ -55,9 +67,18 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   await ActivityLog.create({
     userId: user._id,
     action: 'USER_REGISTER',
-    details: { role: user.role },
+    details: { role: user.role, isEmailVerified: user.isEmailVerified },
     ipAddress: clientIp,
   });
+
+  if (role === 'admin') {
+    return res.status(STATUS_CODES.CREATED).json({
+      success: true,
+      message: 'Admin account created and auto-verified successfully. You can log in directly.',
+      userId: user._id,
+      role: user.role,
+    });
+  }
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">

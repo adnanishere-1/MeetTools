@@ -7,5 +7,6 @@ export const STATUS_CODES = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   UNPROCESSABLE_ENTITY: 422,
+  TOO_MANY_REQUESTS: 429, // 👈 Yeh line add kar dein
   INTERNAL_SERVER_ERROR: 500,
 } as const;

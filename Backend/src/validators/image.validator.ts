@@ -13,7 +13,7 @@ export const resizeImageSchema = z.object({
       .transform((val) => (val ? parseInt(val, 10) : undefined))
       .pipe(z.number().positive().optional()),
     
-    // User requirement: Target file size in KB or MB (e.g. max 500 KB or 2 MB)
+    // Target file size in KB or MB
     targetFileSizeKB: z
       .string()
       .optional()

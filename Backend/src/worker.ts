@@ -1,77 +1,64 @@
+import dotenv from 'dotenv';
+dotenv.config(); // Sabse pehle env load hoga
+
 import { Worker, Job as BullJob } from 'bullmq';
-import { redis } from './config/redis.js';
 import { logger } from './utils/logger.js';
-import { Job } from './models/Job.model.js';
-import { connectDB, disconnectDB } from './config/db.js';
+import { imagekit } from './config/imagekit.js';
 
-// Database connect karna zaroori hai taaki worker MongoDB me jobs update kar sake
+// ⚠️ Zaroori: BullMQ ke liye maxRetriesPerRequest ko null rakhna lazmi hai
+const redisConnection = {
+  host: process.env.REDIS_HOST || 'localhost',
+  port: Number(process.env.REDIS_PORT) || 6379,
+  maxRetriesPerRequest: null, // 👈 Yeh line add karni zaroori thi!
+};
+
 async function startWorker() {
-  await connectDB();
-
   logger.info('🚀 MeetTools Background Worker is starting...');
 
   const worker = new Worker(
-    'image-resize-queue',
+    'meettools-resize-queue',
     async (bullJob: BullJob) => {
-      const { jobId } = bullJob.data;
-      logger.info(`⚙️ Processing job ID: ${jobId}`);
+      const { userId, fileId, fileUrl, transformations } = bullJob.data;
+      logger.info(`⚙️ Processing job ID: ${bullJob.id} for user: ${userId}`);
 
       try {
-        // 1. Database se job find karein
-        const job = await Job.findById(jobId);
-        if (!job) {
-          throw new Error(`Job not found in database: ${jobId}`);
+        await bullJob.updateProgress(20);
+
+        let finalOutputUrl = fileUrl;
+
+        // ImageKit Transformations apply karna
+        if (transformations) {
+          const transformArray: any = [];
+
+          if (transformations.width) transformArray.push({ width: String(transformations.width) });
+          if (transformations.height) transformArray.push({ height: String(transformations.height) });
+          if (transformations.quality) transformArray.push({ quality: String(transformations.quality) });
+          if (transformations.format) transformArray.push({ format: transformations.format });
+
+          finalOutputUrl = imagekit.url({
+            src: fileUrl,
+            transformation: transformArray,
+          });
         }
 
-        // 2. Status update to processing
-        job.status = 'processing';
-        job.progress = 10;
-        await job.save();
+        await bullJob.updateProgress(100);
+        logger.info(`✅ Successfully completed job ID: ${bullJob.id}. Output URL: ${finalOutputUrl}`);
 
-        // TODO: Yahan ImageKit se images download karke 'sharp' library ke zariye resize/process hongi
-        // Aur phir wapas ImageKit par upload kar ke outputFiles array bhara jayega.
+        return {
+          success: true,
+          url: finalOutputUrl,
+          downloadUrl: finalOutputUrl,
+          fileId,
+        };
 
-        // Simulation ke liye progress bar update kar rahe hain
-        for (let i = 20; i <= 90; i += 30) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          job.progress = i;
-          await job.save();
-          logger.info(`🔄 Job ${jobId} progress: ${i}%`);
-        }
-
-        // 3. Job Completed Status
-        job.status = 'completed';
-        job.progress = 100;
-        job.completedAt = new Date();
-        // Temporary dummy output files
-        job.outputFiles = job.inputFiles.map((file) => ({
-          fileId: file.fileId,
-          url: `${process.env.IMAGEKIT_URL_ENDPOINT}/resized-${file.fileName}`,
-          fileName: `resized-${file.fileName}`,
-          fileSize: file.fileSize,
-          width: file.width || 800,
-          height: file.height || 600,
-        }));
-        
-        await job.save();
-        logger.info(`✅ Successfully completed job ID: ${jobId}`);
       } catch (error: any) {
-        logger.error(`❌ Error processing job ${jobId}:`, error);
-        
-        // Error status update in DB
-        await Job.findByIdAndUpdate(jobId, {
-          status: 'failed',
-          error: {
-            message: error.message || 'Unknown processing error',
-            code: 'PROCESSING_FAILED',
-          },
-        });
+        logger.error(`❌ Error processing job ${bullJob.id}:`, error);
         throw error;
       }
     },
     {
-      connection: redis,
-      concurrency: 2, // Ek waqt mein maximum 2 jobs process hongi taaki server overload na ho
+      connection: redisConnection,
+      concurrency: 2,
     }
   );
 
@@ -83,13 +70,6 @@ async function startWorker() {
     logger.error(`❌ BullMQ Job failed: ${job?.id} with error: ${err.message}`);
   });
 }
-
-// Graceful shutdown handling
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM signal received. Closing worker and database...');
-  await disconnectDB();
-  process.exit(0);
-});
 
 startWorker().catch((err) => {
   logger.error('❌ Worker failed to start:', err);

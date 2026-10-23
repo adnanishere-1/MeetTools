@@ -14,6 +14,7 @@ import {
   verifyOTPSchema,
   resendOTPSchema,
   loginSchema,
+  
 } from '../validators/auth.validator.js';
 
 const router = Router();
