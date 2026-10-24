@@ -4,10 +4,20 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { STATUS_CODES } from '../utils/statusCodes.js';
 
+/**
+ * @desc    Create a new image processing preset
+ * @route   POST /api/v1/presets
+ * @access  Private
+ */
 export const createPreset = asyncHandler(async (req: any, res: Response) => {
-  const userId = req.user.id;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new ApiError(STATUS_CODES.UNAUTHORIZED, 'Not authorized, user ID missing');
+  }
+
   const { name, description, options, isDefault } = req.body;
 
+  // Agar naya preset default set ho raha hai, toh baakiyon ko false kar dein
   if (isDefault) {
     await Preset.updateMany({ userId }, { isDefault: false });
   }
@@ -27,8 +37,17 @@ export const createPreset = asyncHandler(async (req: any, res: Response) => {
   });
 });
 
+/**
+ * @desc    Get all user presets
+ * @route   GET /api/v1/presets
+ * @access  Private
+ */
 export const getUserPresets = asyncHandler(async (req: any, res: Response) => {
-  const userId = req.user.id;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new ApiError(STATUS_CODES.UNAUTHORIZED, 'Not authorized, user ID missing');
+  }
+
   const presets = await Preset.find({ userId }).sort({ createdAt: -1 });
 
   return res.status(STATUS_CODES.OK).json({
@@ -38,8 +57,17 @@ export const getUserPresets = asyncHandler(async (req: any, res: Response) => {
   });
 });
 
+/**
+ * @desc    Delete a preset
+ * @route   DELETE /api/v1/presets/:presetId
+ * @access  Private
+ */
 export const deletePreset = asyncHandler(async (req: any, res: Response) => {
-  const userId = req.user.id;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new ApiError(STATUS_CODES.UNAUTHORIZED, 'Not authorized, user ID missing');
+  }
+
   const { presetId } = req.params;
 
   const preset = await Preset.findOneAndDelete({ _id: presetId, userId });

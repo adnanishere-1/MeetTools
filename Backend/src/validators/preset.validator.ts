@@ -3,7 +3,7 @@ import { z } from 'zod';
 const optionsSchema = z
   .object({
     mode: z.enum(['exact', 'fit', 'percentage', 'preset'], {
-      error: 'Mode is required',
+      message: 'Mode is required',
     }),
     width: z.number().positive('Width must be greater than 0').optional(),
     height: z.number().positive('Height must be greater than 0').optional(),
@@ -40,7 +40,7 @@ const optionsSchema = z
 export const createPresetSchema = z.object({
   body: z.object({
     name: z
-      .string({ error: 'Preset name is required' })
+      .string({ message: 'Preset name is required' })
       .min(2, 'Name must be at least 2 characters')
       .trim(),
     description: z.string().trim().optional(),
@@ -51,7 +51,7 @@ export const createPresetSchema = z.object({
 
 export const updatePresetSchema = z.object({
   params: z.object({
-    presetId: z.string({ error: 'Preset ID is required' }),
+    presetId: z.string({ message: 'Preset ID is required' }),
   }),
   body: z.object({
     name: z.string().min(2, 'Name must be at least 2 characters').trim().optional(),
@@ -63,6 +63,6 @@ export const updatePresetSchema = z.object({
 
 export const presetIdParamSchema = z.object({
   params: z.object({
-    presetId: z.string({ error: 'Preset ID is required' }),
+    presetId: z.string({ message: 'Preset ID is required' }),
   }),
 });

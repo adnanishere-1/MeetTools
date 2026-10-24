@@ -10,9 +10,9 @@ export interface IImageFile {
 }
 
 export interface IJob extends Document {
-  userId: mongoose.Types.ObjectId;
+  userId?: mongoose.Types.ObjectId;
   status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress: number; // 0 se 100 tak percentage
+  progress: number;
   inputFiles: IImageFile[];
   outputFiles?: IImageFile[];
   options: {
@@ -47,7 +47,7 @@ const fileSubSchema = new Schema<IImageFile>(
 
 const jobSchema = new Schema<IJob>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: false, index: true },
     status: { 
       type: String, 
       enum: ['pending', 'processing', 'completed', 'failed'], 
@@ -56,7 +56,7 @@ const jobSchema = new Schema<IJob>(
     },
     progress: { type: Number, default: 0, min: 0, max: 100 },
     inputFiles: [fileSubSchema],
-    outputFiles: [fileSubSchema],
+    outputFiles: [fileSubSchema], // 👈 Resized image ki actual details yahan save hongi!
     options: {
       mode: { type: String, enum: ['exact', 'fit', 'percentage', 'preset'], required: true },
       width: Number,
