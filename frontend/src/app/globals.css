@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* =========================================
+   1. Customizable Color Variables
+   Aap yahan apne marzi ke colors daal sakte hain
+   ================================--------- */
+:root {
+  --background: #ffffff; /* Aap yahan default background color change kar sakte hain */
+  --foreground: #171717; /* Aap yahan default text/foreground color change kar sakte hain */
+}
+
+/* Agar aap dark mode system preference support rakhna chahte hain */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* =========================================
+   2. Base Layout & Defaults
+   ================================--------- */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+/* =========================================
+   3. Custom Scrollbar (Clean & Minimal)
+   ================================--------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* Light mode scrollbar thumb */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: #334155; /* Dark mode scrollbar thumb */
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+}
