@@ -15,6 +15,9 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
+      // Set session so dashboard unlocks
+      localStorage.setItem("meettools_user", JSON.stringify({ email, loggedIn: true }));
+      localStorage.setItem("meettools_token", "mock_jwt_token_12345");
       setLoading(false);
       window.location.href = "/dashboard";
     }, 1500);

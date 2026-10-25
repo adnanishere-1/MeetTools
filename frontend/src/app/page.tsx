@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
-import { ArrowArcRightIcon, SparkleIcon, ShieldIcon, CheckCircleIcon, CookieIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, UploadSimpleIcon, SlidersHorizontalIcon, DownloadSimpleIcon, CookieIcon, SquaresFourIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 
 export default function Home() {
@@ -32,77 +32,102 @@ export default function Home() {
       <Navbar />
 
       {/* Hero Section */}
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-20 text-center max-w-5xl mx-auto">
+      <main className="flex-1 flex flex-col items-center justify-center px-6 py-24 text-center max-w-5xl mx-auto">
         
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-xs font-bold mb-8 shadow-sm">
-          <SparkleIcon size={16} weight="fill" className="text-[#fb8500]" />
-          <span>Next-Gen Image Processing Platform</span>
+        {/* Cool Multi-Tool Badge */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-xs font-bold mb-6 shadow-sm">
+          <SquaresFourIcon size={16} weight="fill" className="text-[#fb8500]" />
+          <span>All-in-One Multi-Tools Suite for Creators</span>
         </div>
 
-        {/* Main Heading */}
+        {/* Main Heading for Multiple Tools */}
         <h1 className="text-5xl md:text-7xl font-black tracking-tight text-[#121212] mb-6 leading-tight">
-          Manage & Transform Images with <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#fb8500] to-[#ffb703]">
-            Elite Color Precision
+          One Suite. Infinite Utilities. <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#fb8500] to-[#e07600]">
+            Supercharge Your Workflow
           </span>
         </h1>
 
-        {/* Subtitle */}
-        <p className="max-w-2xl text-lg text-[#555555] mb-10 leading-relaxed font-medium">
-          Experience lightning-fast batch scaling, automated preset management, and secure cloud workflows designed for modern professionals.
+        {/* Subtitle Covering All Tools */}
+        <p className="max-w-2xl text-lg text-[#555555] mb-12 leading-relaxed font-medium">
+          Zero bloat. Infinite utilities. Drop your files, hit export, and let the tools do the heavy lifting
         </p>
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 w-full justify-center max-w-md">
           <Link
-            href="/dashboard"
+            href="/tools"
             className="flex items-center justify-center gap-2 h-14 px-8 rounded-2xl bg-[#fb8500] hover:bg-[#e07600] text-white font-bold transition-all shadow-xl shadow-[#fb8500]/30 text-base"
           >
-            Explore Dashboard
-            <ArrowArcRightIcon size={20} weight="bold" />
+            Explore All Tools
+            <ArrowRightIcon size={20} weight="bold" />
           </Link>
           <Link
-            href="/presets"
+            href="/signup"
             className="flex items-center justify-center h-14 px-8 rounded-2xl border-2 border-[#fb8500]/40 hover:bg-[#fb8500]/10 text-[#121212] font-bold transition-colors text-base"
           >
-            View Presets
+            Get Started Free
           </Link>
         </div>
 
-        {/* Feature Highlights Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-24 text-left">
-          
-          <div className="p-8 rounded-3xl bg-white border border-[#fb8500]/20 shadow-lg shadow-[#fb8500]/5 backdrop-blur-sm">
-            <div className="p-3.5 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl w-fit mb-5 border border-[#fb8500]/20">
-              <SparkleIcon size={28} weight="duotone" />
-            </div>
-            <h3 className="text-xl font-bold text-[#121212] mb-2">Instant Presets</h3>
-            <p className="text-sm text-[#555555] leading-relaxed">
-              Apply customized filters and dimensions instantly with one-click preset synchronization.
-            </p>
+        {/* Interactive Multi-Tool Workflow Section */}
+        <div className="w-full mt-32 text-left">
+          <div className="text-center max-w-xl mx-auto mb-14">
+            <h2 className="text-3xl font-black text-[#121212] mb-3">How Our Suite Works</h2>
+            <p className="text-sm text-[#555555]">Access any utility, process your files, and export in seconds.</p>
           </div>
 
-          <div className="p-8 rounded-3xl bg-white border border-[#fb8500]/20 shadow-lg shadow-[#fb8500]/5 backdrop-blur-sm">
-            <div className="p-3.5 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl w-fit mb-5 border border-[#fb8500]/20">
-              <ShieldIcon size={28} weight="duotone" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            {/* Step 1 */}
+            <div className="bg-white p-8 rounded-3xl border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5 relative flex flex-col justify-between group hover:border-[#fb8500] transition-all">
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="p-4 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl border border-[#fb8500]/20 group-hover:scale-110 transition-transform">
+                    <UploadSimpleIcon size={28} weight="duotone" />
+                  </div>
+                  <span className="text-3xl font-black text-[#fb8500]/20">01</span>
+                </div>
+                <h3 className="text-lg font-bold text-[#121212] mb-2">Choose & Upload</h3>
+                <p className="text-xs text-[#555555] leading-relaxed">
+                  Select your desired utility from our toolkit and drop your files securely into the browser workspace.
+                </p>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-[#121212] mb-2">Secure Pipeline</h3>
-            <p className="text-sm text-[#555555] leading-relaxed">
-              Protected authentication routines and encrypted token handling for complete data safety.
-            </p>
-          </div>
 
-          <div className="p-8 rounded-3xl bg-white border border-[#fb8500]/20 shadow-lg shadow-[#fb8500]/5 backdrop-blur-sm">
-            <div className="p-3.5 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl w-fit mb-5 border border-[#fb8500]/20">
-              <CheckCircleIcon size={28} weight="duotone" />
+            {/* Step 2 */}
+            <div className="bg-white p-8 rounded-3xl border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5 relative flex flex-col justify-between group hover:border-[#fb8500] transition-all">
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="p-4 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl border border-[#fb8500]/20 group-hover:scale-110 transition-transform">
+                    <SlidersHorizontalIcon size={28} weight="duotone" />
+                  </div>
+                  <span className="text-3xl font-black text-[#fb8500]/20">02</span>
+                </div>
+                <h3 className="text-lg font-bold text-[#121212] mb-2">Configure Settings</h3>
+                <p className="text-xs text-[#555555] leading-relaxed">
+                  Apply custom dimensions, scaling rules, or format parameters with real-time live preview rendering.
+                </p>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-[#121212] mb-2">High Efficiency</h3>
-            <p className="text-sm text-[#555555] leading-relaxed">
-              Optimized for high-performance rendering with zero latency and smooth UI transitions.
-            </p>
-          </div>
 
+            {/* Step 3 */}
+            <div className="bg-white p-8 rounded-3xl border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5 relative flex flex-col justify-between group hover:border-[#fb8500] transition-all">
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="p-4 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl border border-[#fb8500]/20 group-hover:scale-110 transition-transform">
+                    <DownloadSimpleIcon size={28} weight="duotone" />
+                  </div>
+                  <span className="text-3xl font-black text-[#fb8500]/20">03</span>
+                </div>
+                <h3 className="text-lg font-bold text-[#121212] mb-2">Instant Download</h3>
+                <p className="text-xs text-[#555555] leading-relaxed">
+                  Export your optimized, high-quality assets instantly with zero hassle and absolute data privacy.
+                </p>
+              </div>
+            </div>
+
+          </div>
         </div>
 
       </main>
@@ -137,10 +162,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="py-6 text-center text-xs text-[#777777] border-t border-[#fb8500]/20 bg-white">
-        © {new Date().getFullYear()} MeetTools SaaS. All rights reserved.
-      </footer>
     </div>
   );
 }
