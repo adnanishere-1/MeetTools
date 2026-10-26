@@ -11,16 +11,19 @@ const imagekit = new ImageKit({
 const redisConnection = {
   host: process.env.REDIS_HOST || 'localhost',
   port: Number(process.env.REDIS_PORT) || 6379,
+  maxRetriesPerRequest: null, // ⚠️ IMPORTANT: Worker ke liye compulsory hai, warna crash
 };
 
 const processResizeJob = async (job: Job) => {
-  const { userId, fileId, fileUrl, width, height, quality, format } = job.data;
-  logger.info(`📐 High-Quality Resize Job ${job.id} started`);
+  // ✅ FIX: Controller transformations object bhejta hai — usko sahi se destruct karo
+  const { fileId, fileUrl, originalFileName, originalSize, transformations } = job.data;
+  const { width, height, quality, format } = transformations || {};
+
+  logger.info(`📐 Resize Job ${job.id} started`);
 
   try {
     await job.updateProgress(20);
 
-    // Ultra-High Quality Preservation Array
     const transformation: any[] = [];
 
     // 1. Dimensions with Aspect Ratio Preservation
@@ -28,31 +31,36 @@ const processResizeJob = async (job: Job) => {
       transformation.push({
         width: width ? String(width) : undefined,
         height: height ? String(height) : undefined,
-        cropMode: 'maintain_ratio', // Anti-distortion
+        cropMode: 'maintain_ratio',
         focus: 'auto',
       });
     }
 
-    // 2. High Quality Retention & Sharpness Filter
+    // 2. Quality & Format
     transformation.push({
-      quality: quality ? String(quality) : '90', // High quality threshold
-      format: format || 'webp',                  // Modern crisp format
-      effectSharpen: '10',                      // Subtle anti-blur sharpen
+      quality: quality ? String(quality) : '90',
+      format: format || 'webp',
+      effectSharpen: '10',
     });
 
-    // Generate High-Fidelity URL
+    // Generate final URL
     const resizedUrl = imagekit.url({
       src: fileUrl,
       transformation,
     });
 
     await job.updateProgress(100);
-    logger.info(`✅ Resize Job ${job.id} finished without quality loss.`);
+    logger.info(`✅ Resize Job ${job.id} finished. URL: ${resizedUrl}`);
 
+    // ✅ FIX: Ye fields status controller expect karta hai (result.url, result.fileName...)
     return {
       success: true,
-      resizedUrl,
       fileId,
+      url: resizedUrl,
+      fileName: originalFileName,
+      fileSize: originalSize,
+      width: width ?? null,
+      height: height ?? null,
     };
   } catch (error: any) {
     logger.error(`❌ Resize Job ${job.id} failed: ${error.message}`);
@@ -63,4 +71,12 @@ const processResizeJob = async (job: Job) => {
 export const resizeWorker = new Worker('meettools-resize-queue', processResizeJob, {
   connection: redisConnection,
   concurrency: 5,
+});
+
+// Optional: Worker errors log karo
+resizeWorker.on('failed', (job, err) => {
+  logger.error(`💥 Job ${job?.id} failed: ${err.message}`);
+});
+resizeWorker.on('completed', (job) => {
+  logger.info(`🏁 Job ${job.id} completed`);
 });

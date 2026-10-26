@@ -5,37 +5,40 @@ import { STATUS_CODES } from '../utils/statusCodes.js';
 import { uploadToImageKit } from '../config/imagekit.js';
 import { resizeQueue } from '../queues/imageQueue.js';
 import { redis } from '../config/redis.js';
-import { logActivity } from '../utils/logActivity.js';
-import { Job } from '../models/Job.model.js'; // 👈 MongoDB Job Model import kiya
+import { Job } from '../models/Job.model.js';
 
 const DAILY_LIMIT = 15;
 const LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24 Hours
 
 async function checkAndIncrementDailyLimit(identifier: string) {
   const limitKey = `daily_image_limit:${identifier}`;
-  const currentCountStr = await redis.get(limitKey);
-  const currentCount = currentCountStr ? parseInt(currentCountStr, 10) : 0;
+  
+  // ✅ ATOMIC FIX: Pehle increment karein taaki race condition khatam ho jaye
+  const currentCount = await redis.incr(limitKey);
 
-  if (currentCount >= DAILY_LIMIT) {
+  // Agar yeh pehli request hai (count = 1), toh 24 hours ki expiry set kar dein
+  if (currentCount === 1) {
+    await redis.expire(limitKey, LIMIT_TTL_SECONDS);
+  }
+
+  // Agar limit cross ho chuki hai, toh counter wapas decrement karke block kar dein
+  if (currentCount > DAILY_LIMIT) {
+    await redis.decr(limitKey);
     return { allowed: false, remaining: 0 };
   }
 
-  if (currentCount === 0) {
-    await redis.set(limitKey, 1, 'EX', LIMIT_TTL_SECONDS);
-  } else {
-    await redis.incr(limitKey);
-  }
-
-  return { allowed: true, remaining: DAILY_LIMIT - (currentCount + 1) };
+  return { allowed: true, remaining: DAILY_LIMIT - currentCount };
 }
 
 /**
  * @desc    Resize or Compress Image
  * @route   POST /api/v1/images/resize
- * @access  Private
+ * @access  Private / Guest
  */
 export const resizeImage = asyncHandler(async (req: any, res: Response) => {
-  const userId = req.user?.id; // Agar authenticated user ID ho
+  console.log("🔥 [BACKEND API HIT] POST /api/v1/images/resize called!");
+
+  const userId = req.user?.id;
   const identifier = userId || req.ip;
   const {
     width,
@@ -48,11 +51,15 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
   } = req.body;
 
   if (!req.file) {
+    console.log("❌ Error: No file uploaded in request");
     throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Please upload an image file');
   }
 
+  console.log(`📁 File received: ${req.file.originalname} (${req.file.size} bytes)`);
+
   const limitCheck = await checkAndIncrementDailyLimit(identifier);
   if (!limitCheck.allowed) {
+    console.log(`⚠️ Rate limit exceeded for identifier: ${identifier}`);
     throw new ApiError(
       STATUS_CODES.TOO_MANY_REQUESTS,
       'You have reached your daily limit of 15 images. Please try again after 24 hours.'
@@ -66,16 +73,21 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
     maxSizeBytes = Math.round(targetFileSizeKB * 1024);
   }
 
+  // ✅ Safety Check: Quality ko max 100 tak limit karein taaki Mongoose validation fail na ho
+  const parsedQuality = quality ? Math.min(Number(quality), 100) : 90;
+
   // 1. Upload original image to ImageKit temporarily
+  console.log("☁️ Uploading original file to ImageKit...");
   const uploadResult = await uploadToImageKit(
     req.file.buffer,
     req.file.originalname,
     '/meettools/resizes'
   );
+  console.log("✅ ImageKit Upload Success. File ID:", uploadResult.fileId);
 
-  // 2. MongoDB mein initial Job record create karein ('pending' status ke sath)
+  // 2. MongoDB mein initial Job record create karein
   const dbJob = await Job.create({
-    userId: userId || undefined, // Agar user logged in hai
+    userId: userId || undefined,
     status: 'pending',
     progress: 0,
     inputFiles: [
@@ -91,12 +103,13 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
       width: width ? Number(width) : undefined,
       height: height ? Number(height) : undefined,
       outputFormat: format || 'webp',
-      quality: quality ? Number(quality) : 85,
+      quality: parsedQuality,
       maintainAspectRatio: true,
     },
   });
+  console.log("📝 MongoDB Job record created with ID:", dbJob._id);
 
-  // 3. Queue job with BullMQ (dbJob._id pass kar rahe hain taaki status track ho sakay)
+  // 3. Queue job with BullMQ
   const bullJob = await resizeQueue.add('meettools-resize-job', {
     dbJobId: dbJob._id,
     userId: identifier,
@@ -108,11 +121,12 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
       width: width ? Number(width) : undefined,
       height: height ? Number(height) : undefined,
       maxSizeBytes,
-      quality: quality ? Number(quality) : 85,
+      quality: parsedQuality,
       format: format || 'webp',
       preserveResolution: preserveResolution ?? true,
     },
   });
+  console.log("⚙️ BullMQ Job added successfully with ID:", bullJob.id);
 
   return res.status(STATUS_CODES.CREATED).json({
     success: true,
@@ -126,19 +140,24 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
 /**
  * @desc    Upload image and queue for background processing/resizing
  * @route   POST /api/v1/images/upload
- * @access  Private
+ * @access  Private / Guest
  */
 export const uploadAndResizeImage = asyncHandler(async (req: any, res: Response) => {
+  console.log("🔥 [BACKEND API HIT] POST /api/v1/images/upload called!");
+
   if (!req.file) {
+    console.log("❌ Error: No file uploaded in upload route");
     throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Please upload an image file');
   }
 
   const userId = req.user?.id;
   const identifier = userId || req.ip;
-  const { width, height, format } = req.body;
+  const { width, height, format, quality } = req.body;
+  const parsedQuality = quality ? Math.min(Number(quality), 100) : 90;
 
   const limitCheck = await checkAndIncrementDailyLimit(identifier);
   if (!limitCheck.allowed) {
+    console.log(`⚠️ Rate limit exceeded for identifier: ${identifier}`);
     throw new ApiError(
       STATUS_CODES.TOO_MANY_REQUESTS,
       'You have reached your daily limit of 15 images. Please try again after 24 hours.'
@@ -168,7 +187,7 @@ export const uploadAndResizeImage = asyncHandler(async (req: any, res: Response)
       width: width ? Number(width) : undefined,
       height: height ? Number(height) : undefined,
       outputFormat: format || 'webp',
-      quality: 85,
+      quality: parsedQuality,
       maintainAspectRatio: true,
     },
   });
@@ -183,7 +202,7 @@ export const uploadAndResizeImage = asyncHandler(async (req: any, res: Response)
     transformations: {
       width: width ? Number(width) : undefined,
       height: height ? Number(height) : undefined,
-      quality: 85,
+      quality: parsedQuality,
       format: format || 'webp',
     },
   });
@@ -198,16 +217,18 @@ export const uploadAndResizeImage = asyncHandler(async (req: any, res: Response)
 });
 
 /**
- * @desc    Check background job status and get processed download/preview URL + Populate actual details in DB
+ * @desc    Check background job status and get processed download/preview URL
  * @route   GET /api/v1/images/status/:jobId
- * @access  Private
+ * @access  Private / Guest
  */
 export const getJobResultStatus = asyncHandler(async (req: any, res: Response) => {
   const { jobId } = req.params;
+  console.log(`🔍 [STATUS CHECK] Checking status for Job ID: ${jobId}`);
 
   const job = await resizeQueue.getJob(jobId);
 
   if (!job) {
+    console.log(`❌ Job not found in queue: ${jobId}`);
     throw new ApiError(STATUS_CODES.NOT_FOUND, 'Job not found or expired');
   }
 
@@ -215,7 +236,7 @@ export const getJobResultStatus = asyncHandler(async (req: any, res: Response) =
   const isFailed = await job.isFailed();
 
   if (isFailed) {
-    // DB mein bhi failed status update kar dein agar dbJobId ho
+    console.log(`❌ Job failed in background worker: ${jobId}`);
     if (job.data.dbJobId) {
       await Job.findByIdAndUpdate(job.data.dbJobId, { status: 'failed' });
     }
@@ -228,6 +249,7 @@ export const getJobResultStatus = asyncHandler(async (req: any, res: Response) =
   }
 
   if (!isCompleted) {
+    console.log(`⏳ Job is still processing... ID: ${jobId}`);
     return res.status(STATUS_CODES.OK).json({
       success: true,
       status: 'processing',
@@ -236,8 +258,8 @@ export const getJobResultStatus = asyncHandler(async (req: any, res: Response) =
   }
 
   const result = job.returnvalue;
+  console.log(`✨ Job completed successfully! ID: ${jobId}`);
 
-  // 🔄 POPULATE STEP: Job complete hone par MongoDB mein actual resized details save karna
   if (job.data.dbJobId && result) {
     await Job.findByIdAndUpdate(job.data.dbJobId, {
       status: 'completed',

@@ -6,6 +6,8 @@ import app from './app.js';
 import { connectDB } from './config/db.js';
 import { logger } from './utils/logger.js';
 import { redis } from './config/redis.js'; // Ab yeh sahi waqt par env variables ke sath chalega
+import './workers/resizeWorker.js'; // ⚠️ IMPORTANT: BullMQ Worker process start karne ke liye (dotenv ke baad)
+
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
@@ -22,10 +24,9 @@ async function startServer() {
     const handleShutdown = (signal: string) => {
       logger.info(`${signal} signal received: closing HTTP server gracefully...`);
       server.close(async () => {
-        logger.info('HTTP server are the closed.');
-        // Redis connection bhi close karna acha practice hai
+        logger.info('HTTP server closed.');
         await redis.quit();
-        logger.info('Redis connection are Closed.');
+        logger.info('Redis connection closed.');
         process.exit(0);
       });
     };

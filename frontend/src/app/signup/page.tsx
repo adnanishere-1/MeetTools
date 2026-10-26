@@ -3,7 +3,17 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
-import { UserIcon, EnvelopeSimpleIcon, LockSimpleIcon, EyeIcon, EyeSlashIcon, ArrowRightIcon, ShieldCheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { 
+  UserIcon, 
+  EnvelopeSimpleIcon, 
+  LockSimpleIcon, 
+  EyeIcon, 
+  EyeSlashIcon, 
+  ArrowRightIcon, 
+  ShieldCheckIcon,
+  CheckIcon,
+  XIcon
+} from "@phosphor-icons/react/dist/ssr";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function SignUpPage() {
@@ -13,7 +23,7 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
-
+  
   // Consent States
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [analyticsConsent, setAnalyticsConsent] = useState(false);
@@ -24,6 +34,17 @@ export default function SignUpPage() {
   const [canResend, setCanResend] = useState(false);
 
   const { signupUser, verifyOtp, resendOtp, loading, error } = useAuth();
+
+  // Password Rules Check
+  const rules = {
+    minLength: password.length >= 8,
+    hasUpper: /[A-Z]/.test(password),
+    hasLower: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecial: /[^A-Za-z0-9]/.test(password),
+  };
+
+  const isPasswordStrong = Object.values(rules).every(Boolean);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -39,6 +60,11 @@ export default function SignUpPage() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isPasswordStrong) {
+      alert("Please ensure your password meets all security criteria.");
+      return;
+    }
 
     if (!termsAccepted) {
       alert("Please accept the Terms & Conditions and Privacy Policy to continue.");
@@ -92,7 +118,7 @@ export default function SignUpPage() {
 
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5">
-
+          
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-semibold">
               {error}
@@ -167,7 +193,7 @@ export default function SignUpPage() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 characters"
+                      placeholder="8+ chars, Uppercase, Number, Special"
                       className="w-full pl-12 pr-12 py-3.5 bg-[#fff3ec]/50 border border-[#fb8500]/20 rounded-2xl text-sm focus:outline-none focus:border-[#fb8500] focus:bg-white transition-all text-[#121212]"
                     />
                     <button
@@ -178,6 +204,27 @@ export default function SignUpPage() {
                       {showPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
                     </button>
                   </div>
+
+                  {/* Single-Line Compact Password Requirement Badges */}
+                  {password.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.minLength ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                        {rules.minLength ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} 8+ Chars
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasUpper ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                        {rules.hasUpper ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Uppercase
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasLower ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                        {rules.hasLower ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Lowercase
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasNumber ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                        {rules.hasNumber ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Number
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasSpecial ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                        {rules.hasSpecial ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Special (!@#$)
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Terms and Consents Checkboxes */}
@@ -222,10 +269,10 @@ export default function SignUpPage() {
 
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !isPasswordStrong}
                   className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-4 disabled:opacity-50"
                 >
-                  {loading ? "Sending OTP..." : "Continue to Verify Email"}
+                  {loading ? "Sending OTP..." : "Continue"}
                   {!loading && <ArrowRightIcon size={20} weight="bold" />}
                 </button>
               </form>
@@ -277,8 +324,9 @@ export default function SignUpPage() {
                     type="button"
                     onClick={handleResendOtpCode}
                     disabled={!canResend || loading}
-                    className={`text-xs font-bold transition-colors ${canResend ? "text-[#fb8500] hover:underline cursor-pointer" : "text-gray-400 cursor-not-allowed"
-                      }`}
+                    className={`text-xs font-bold transition-colors ${
+                      canResend ? "text-[#fb8500] hover:underline cursor-pointer" : "text-gray-400 cursor-not-allowed"
+                    }`}
                   >
                     {canResend ? "Didn't receive code? Resend OTP" : `Resend code available in ${resendTimer}s`}
                   </button>

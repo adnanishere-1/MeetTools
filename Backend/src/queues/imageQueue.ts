@@ -2,7 +2,7 @@ import { Queue } from 'bullmq';
 
 const redisConnection = {
   host: process.env.REDIS_HOST || 'localhost',
-  port: Number(process.env.REDISS_PORT || process.env.REDIS_PORT) || 6379,
+  port: Number(process.env.REDIS_PORT) || 6379, // ✅ REDISS_PORT typo fix
   maxRetriesPerRequest: null, // BullMQ ke liye zaroori hai
   // Agar Redis password ho toh yahan uncomment karein:
   // password: process.env.REDIS_PASSWORD || undefined,
@@ -15,12 +15,12 @@ const defaultJobOptions = {
     type: 'exponential' as const,
     delay: 2000,
   },
-  // 💥 FIX: true ki jagah age aur count rakha hai taaki status API check kar sake
+  // Completed jobs 1 ghante tak Redis mein save rahengi (status API ke liye)
   removeOnComplete: {
-    age: 3600, // Completed jobs 1 ghante (3600 seconds) tak Redis mein save rahengi
-    count: 100, // Maximum pichli 100 completed jobs store rahengi
+    age: 3600,
+    count: 100,
   },
-  removeOnFail: false, // Failed jobs ko debug ke liye store rakhein
+  removeOnFail: false, // Failed jobs debug ke liye
 };
 
 // 1. General/Default Image Queue (Backward compatibility ke liye)
