@@ -4,7 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from "@/components/layout/Navbar";
 import { CropIcon, UploadSimpleIcon, ArrowLeftIcon, SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useImageResize } from '@/hooks/useImageResize';
+import axios from "axios";
 
 export default function ImageResizeTool() {
   const [file, setFile] = useState<File | null>(null);
@@ -12,13 +14,43 @@ export default function ImageResizeTool() {
   const [width, setWidth] = useState<string>('800');
   const [height, setHeight] = useState<string>('600');
   const [format, setFormat] = useState<'jpeg' | 'png' | 'webp' | 'avif'>('webp');
-  const [quality, setQuality] = useState<string>('90'); // Default high quality for clean output
+  const [quality, setQuality] = useState<string>('90');
   const [isDownloading, setIsDownloading] = useState(false);
+
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("jobId");
 
   const { handleResize, loading, status, progressMessage, result, error } = useImageResize();
   const resultRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on completion
+  // 🔍 Database se Job ID ke zariye original data fetch karna
+  useEffect(() => {
+    const fetchJobData = async () => {
+      if (!jobId) return;
+      try {
+        const token = localStorage.getItem("token") || localStorage.getItem("meettools_token");
+        const response = await axios.get(`/api/v1/jobs/${jobId}`, {
+          headers: { Authorization: token ? `Bearer ${token}` : undefined }
+        });
+
+        const jobData = response.data;
+        const targetFile = jobData.outputFiles?.[0] || jobData.inputFiles?.[0];
+
+        if (targetFile && targetFile.url) {
+          setPreviewImage(targetFile.url);
+          const fileRes = await fetch(targetFile.url);
+          const blob = await fileRes.blob();
+          const originalFile = new File([blob], targetFile.fileName || "datastore-image.webp", { type: blob.type || "image/webp" });
+          setFile(originalFile);
+        }
+      } catch (err) {
+        console.error("Database se job data laane mein masla aaya:", err);
+      }
+    };
+
+    fetchJobData();
+  }, [jobId]);
+
   useEffect(() => {
     if (result && result.status === 'completed') {
       resultRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -39,13 +71,11 @@ export default function ImageResizeTool() {
 
   const handleExecuteResize = () => {
     if (!file) {
-      alert("Please upload an image first!");
+      alert("Pehle image upload karein ya select karein!");
       return;
     }
 
     const numericQuality = Math.min(Math.max(Number(quality) || 90, 10), 100);
-
-    console.log("🔥 Triggering resize for file:", file.name);
 
     handleResize(file, {
       width: width ? Number(width) : undefined,
@@ -55,24 +85,20 @@ export default function ImageResizeTool() {
     });
   };
 
-  // 📥 Direct Local Library / Folder Download Function (Blob method)
   const handleDownloadImage = async (url: string, filename: string) => {
     try {
       setIsDownloading(true);
       const response = await fetch(url);
       const blob = await response.blob();
-      
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = filename || `resized-image.${format}`;
       document.body.appendChild(link);
       link.click();
-      
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("Direct download failed, opening in new tab:", err);
       window.open(url, '_blank');
     } finally {
       setIsDownloading(false);
@@ -98,7 +124,7 @@ export default function ImageResizeTool() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-[#121212]">Image Resize & Compress Utility</h1>
-              <p className="text-sm text-[#555555]">Powered by backend background worker queue & ImageKit.</p>
+              <p className="text-sm text-[#555555]">Powered by backend database records & background worker queue.</p>
             </div>
           </div>
 
@@ -115,7 +141,6 @@ export default function ImageResizeTool() {
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row gap-8 items-center bg-[#fff3ec]/40 p-6 rounded-2xl border border-[#fb8500]/20">
                 
-                {/* Image Preview */}
                 <div className="w-full md:w-1/2 flex justify-center">
                   {previewImage && (
                     <img
@@ -126,7 +151,6 @@ export default function ImageResizeTool() {
                   )}
                 </div>
 
-                {/* Settings Form Controls */}
                 <div className="w-full md:w-1/2 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -180,17 +204,12 @@ export default function ImageResizeTool() {
                         min="10"
                         max="100"
                         value={quality}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          if (val > 100) setQuality('100');
-                          else setQuality(e.target.value);
-                        }}
+                        onChange={(e) => setQuality(e.target.value)}
                         className="w-full px-4 py-2.5 bg-white border border-[#fb8500]/20 rounded-xl text-sm font-bold focus:outline-none focus:border-[#fb8500]"
                       />
                     </div>
                   </div>
 
-                  {/* Direct Action Button */}
                   <button
                     type="button"
                     onClick={handleExecuteResize}
@@ -216,27 +235,23 @@ export default function ImageResizeTool() {
             </div>
           )}
 
-          {/* Progress / Status Section */}
           {loading && (
             <div className="mt-6 p-6 bg-orange-50 border border-orange-200 rounded-2xl text-center space-y-2">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#fb8500] mx-auto"></div>
               <p className="text-sm font-bold text-orange-800">{progressMessage || 'Processing image in background queue...'}</p>
-              <span className="text-xs text-gray-500 uppercase tracking-widest font-extrabold">Status: {status || 'processing'}</span>
             </div>
           )}
 
-          {/* Error Message */}
           {error && (
             <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm font-semibold text-center">
               {error}
             </div>
           )}
 
-          {/* Result Section with Ref for Auto-Scroll */}
           <div ref={resultRef}>
             {result && result.status === 'completed' && (
               <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-2xl space-y-4 text-center">
-                <h3 className="text-base font-black text-green-800">✅ Image Processed Successfully via Queue!</h3>
+                <h3 className="text-base font-black text-green-800">✅ Image Processed Successfully via Datastore!</h3>
                 <div className="flex justify-center my-2">
                   <img src={result.previewUrl} alt="Resized Result" className="max-h-52 rounded-xl shadow-md border border-green-200" />
                 </div>
@@ -246,7 +261,7 @@ export default function ImageResizeTool() {
                   onClick={() => handleDownloadImage(result.downloadUrl, result.fileDetails?.fileName || `compressed-image.${format}`)}
                   className="block text-center w-full py-3.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-green-600/30 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {isDownloading ? 'Downloading to Library...' : 'Download Processed Image'}
+                  {isDownloading ? 'Downloading...' : 'Download Processed Image'}
                 </button>
               </div>
             )}

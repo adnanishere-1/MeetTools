@@ -4,23 +4,41 @@ import { useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import { EnvelopeSimpleIcon, LockSimpleIcon, EyeIcon, EyeSlashIcon, ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import axios from "axios";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      // Set session so dashboard unlocks
-      localStorage.setItem("meettools_user", JSON.stringify({ email, loggedIn: true }));
-      localStorage.setItem("meettools_token", "mock_jwt_token_12345");
+    setErrorMsg("");
+
+    try {
+      // Backend real login API endpoint hit ho raha hai
+      const response = await axios.post("/api/v1/auth/login", {
+        email,
+        password,
+      });
+
+      // Backend se aane wala data (jaise token aur user info)
+      const { token, user } = response.data;
+
+      // Asli token aur user details localStorage mein save kar rahe hain
+      localStorage.setItem("meettools_user", JSON.stringify(user || { email, loggedIn: true }));
+      localStorage.setItem("meettools_token", token);
+      localStorage.setItem("token", token); // Backup key for safety
+
       setLoading(false);
       window.location.href = "/dashboard";
-    }, 1500);
+    } catch (err: any) {
+      setLoading(false);
+      setErrorMsg(err.response?.data?.message || "Invalid email or password. Please try again.");
+    }
   };
 
   return (
@@ -34,6 +52,12 @@ export default function LoginPage() {
             <h1 className="text-3xl font-black text-[#121212] mb-2">Welcome Back</h1>
             <p className="text-sm text-[#555555]">Sign in to access your image processing dashboard</p>
           </div>
+
+          {errorMsg && (
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs text-center font-medium">
+              {errorMsg}
+            </div>
+          )}
 
           <div className="flex bg-[#fff3ec] p-1.5 rounded-2xl mb-8 border border-[#fb8500]/10">
             <Link

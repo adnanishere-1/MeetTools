@@ -3,47 +3,104 @@
 import { useState, useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
 import { 
-  FileTextIcon, 
   TrashIcon, 
   FolderSimpleIcon, 
   LockKeyIcon, 
   ArrowRightIcon,
   CheckCircleIcon,
-  WrenchIcon
+  WrenchIcon,
+  DownloadSimpleIcon,
+  ImageSquareIcon,
+  ArrowsClockwiseIcon
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import axios from "axios";
 
-interface UploadedDocument {
-  id: string;
-  name: string;
+interface JobFile {
+  fileId: string;
   url: string;
-  size: string;
-  uploadedAt: string;
+  fileName: string;
+  fileSize: number;
+}
+
+interface JobItem {
+  _id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  inputFiles: JobFile[];
+  outputFiles?: JobFile[];
+  createdAt: string;
 }
 
 export default function DashboardPage() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+  const [jobs, setJobs] = useState<JobItem[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
-    // Check if user is logged in
-    const user = localStorage.getItem("meettools_user");
-    if (user) {
-      setIsLoggedIn(true);
-      // Load saved user assets/documents from localStorage
-      const savedDocs = localStorage.getItem("meettools_user_documents");
-      if (savedDocs) {
-        setDocuments(JSON.parse(savedDocs));
+    const checkAuthAndFetchJobs = async () => {
+      const user = localStorage.getItem("meettools_user");
+      const token = 
+        localStorage.getItem("token") || 
+        localStorage.getItem("meettools_token") || 
+        localStorage.getItem("accessToken");
+
+      if (user || token) {
+        setIsLoggedIn(true);
+        try {
+          const response = await axios.get("/api/v1/jobs", {
+            headers: {
+              Authorization: token ? `Bearer ${token}` : undefined,
+            },
+          });
+          
+          if (response.data && response.data.jobs) {
+            setJobs(response.data.jobs);
+          }
+        } catch (error) {
+          console.error("Failed to fetch jobs history from database:", error);
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+
+    checkAuthAndFetchJobs();
   }, []);
 
-  const handleDelete = (id: string) => {
-    const updated = documents.filter((doc) => doc.id !== id);
-    setDocuments(updated);
-    localStorage.setItem("meettools_user_documents", JSON.stringify(updated));
+  const handleDelete = async (id: string) => {
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("meettools_token");
+      await axios.delete(`/api/v1/jobs/${id}`, {
+        headers: { Authorization: token ? `Bearer ${token}` : undefined },
+      });
+      setJobs(jobs.filter((job) => job._id !== id));
+    } catch (error) {
+      console.error("Failed to delete job:", error);
+      alert("Job delete karne mein masla aaya hai.");
+    }
+  };
+
+  // 🔄 Datastore Approach: URL Query mein Job ID pass kar rahe hain
+  const handleReuseJob = (jobId: string) => {
+    router.push(`/tools/image-resizer?jobId=${jobId}`);
+  };
+
+  const handleDirectDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename || 'downloaded-image.jpg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      window.open(url, '_blank');
+    }
   };
 
   if (loading) {
@@ -54,7 +111,6 @@ export default function DashboardPage() {
     );
   }
 
-  // Guest Protection Screen
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen flex flex-col bg-[#fff3ec] text-[#121212] font-sans">
@@ -88,14 +144,12 @@ export default function DashboardPage() {
     );
   }
 
-  // Logged-in User Dashboard (Asset Library View)
   return (
     <div className="min-h-screen flex flex-col bg-[#fff3ec] text-[#121212] font-sans">
       <Navbar />
 
       <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full">
         
-        {/* Header Banner (Upload button removed, replaced with status/info) */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl border border-[#fb8500]/20 shadow-lg shadow-[#fb8500]/5 mb-10">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fb8500]/10 text-[#fb8500] text-xs font-bold mb-3 border border-[#fb8500]/20">
@@ -104,7 +158,7 @@ export default function DashboardPage() {
             </div>
             <h1 className="text-3xl font-black text-[#121212]">Asset Library & Dashboard</h1>
             <p className="text-sm text-[#555555] mt-1">
-              Your processed images and tools outputs are automatically saved here. Use them directly in any tool!
+              Your processed images and tools outputs are automatically saved here from the database.
             </p>
           </div>
 
@@ -117,23 +171,22 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Saved Assets Section */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-[#121212] flex items-center gap-2">
               <FolderSimpleIcon size={24} className="text-[#fb8500]" weight="duotone" />
-              Your Saved Assets ({documents.length})
+              Your Saved Assets ({jobs.length})
             </h2>
           </div>
 
-          {documents.length === 0 ? (
+          {jobs.length === 0 ? (
             <div className="bg-white rounded-3xl p-12 text-center border border-[#fb8500]/20">
               <div className="w-16 h-16 bg-[#fff3ec] text-[#fb8500] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#fb8500]/20">
-                <FileTextIcon size={32} weight="duotone" />
+                <ImageSquareIcon size={32} weight="duotone" />
               </div>
               <h3 className="text-lg font-bold text-[#121212] mb-1">No Assets Saved Yet</h3>
               <p className="text-xs text-[#777777] max-w-sm mx-auto mb-6">
-                When you use any tool (like Image Resizer or Editor) and process an image, it will automatically appear here.
+                When you use any tool (like Image Resizer) and process an image, it will automatically appear here.
               </p>
               <Link
                 href="/tools"
@@ -144,35 +197,76 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="bg-white p-6 rounded-3xl border border-[#fb8500]/20 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className="p-3 bg-[#fff3ec] text-[#fb8500] rounded-xl border border-[#fb8500]/20 shrink-0">
-                      <FileTextIcon size={24} weight="duotone" />
-                    </div>
-                    <button
-                      onClick={() => handleDelete(doc.id)}
-                      className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                      title="Delete asset"
-                    >
-                      <TrashIcon size={18} />
-                    </button>
-                  </div>
+              {jobs.map((job) => {
+                const fileName = job.outputFiles?.[0]?.fileName || job.inputFiles?.[0]?.fileName || "Processed Image";
+                const fileSize = job.outputFiles?.[0]?.fileSize 
+                  ? `${(job.outputFiles[0].fileSize / 1024).toFixed(1)} KB` 
+                  : "Optimized";
+                const downloadUrl = job.outputFiles?.[0]?.url || job.inputFiles?.[0]?.url;
+                const formattedDate = new Date(job.createdAt).toLocaleDateString();
 
-                  <div>
-                    <h4 className="text-sm font-bold text-[#121212] truncate mb-1" title={doc.name}>
-                      {doc.name}
-                    </h4>
-                    <div className="flex items-center justify-between text-xs text-[#777777] pt-3 border-t border-[#fb8500]/10">
-                      <span>{doc.size}</span>
-                      <span>{doc.uploadedAt}</span>
+                return (
+                  <div
+                    key={job._id}
+                    className="bg-white p-6 rounded-3xl border border-[#fb8500]/20 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Large Image Preview Card */}
+                      <div className="relative w-full h-44 bg-[#fff3ec] rounded-2xl overflow-hidden mb-4 border border-[#fb8500]/15 flex items-center justify-center">
+                        {downloadUrl ? (
+                          <img 
+                            src={downloadUrl} 
+                            alt={fileName} 
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <ImageSquareIcon size={44} className="text-[#fb8500]" weight="duotone" />
+                        )}
+                      </div>
+
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h4 className="text-sm font-bold text-[#121212] truncate" title={fileName}>
+                          {fileName}
+                        </h4>
+                        
+                        <div className="flex items-center gap-1 shrink-0">
+                          {job.status === "completed" && downloadUrl && (
+                            <>
+                              <button
+                                onClick={() => handleReuseJob(job._id)}
+                                className="p-2 bg-[#fb8500]/10 text-[#fb8500] hover:bg-[#fb8500] hover:text-white rounded-xl transition-colors cursor-pointer"
+                                title="Resize / Use Again in Tool"
+                              >
+                                <ArrowsClockwiseIcon size={18} weight="bold" />
+                              </button>
+                              <button
+                                onClick={() => handleDirectDownload(downloadUrl, fileName)}
+                                className="p-2 bg-[#fb8500]/10 text-[#fb8500] hover:bg-[#fb8500] hover:text-white rounded-xl transition-colors cursor-pointer"
+                                title="Download Image Directly"
+                              >
+                                <DownloadSimpleIcon size={18} weight="bold" />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleDelete(job._id)}
+                            className="p-2 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                            title="Remove from database"
+                          >
+                            <TrashIcon size={18} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
+
+                    <div className="flex items-center justify-between text-xs text-[#777777] pt-3 border-t border-[#fb8500]/10 mt-2">
+                      <span className="capitalize font-medium text-blue-600">{job.status}</span>
+                      <span>{fileSize} • {formattedDate}</span>
+                    </div>
+
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

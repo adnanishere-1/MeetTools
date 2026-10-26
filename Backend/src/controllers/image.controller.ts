@@ -36,7 +36,7 @@ async function checkAndIncrementDailyLimit(identifier: string) {
  * @access  Private / Guest
  */
 export const resizeImage = asyncHandler(async (req: any, res: Response) => {
-  console.log("🔥 [BACKEND API HIT] POST /api/v1/images/resize called!");
+
 
   const userId = req.user?.id;
   const identifier = userId || req.ip;
@@ -107,7 +107,7 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
       maintainAspectRatio: true,
     },
   });
-  console.log("📝 MongoDB Job record created with ID:", dbJob._id);
+ 
 
   // 3. Queue job with BullMQ
   const bullJob = await resizeQueue.add('meettools-resize-job', {
@@ -143,7 +143,7 @@ export const resizeImage = asyncHandler(async (req: any, res: Response) => {
  * @access  Private / Guest
  */
 export const uploadAndResizeImage = asyncHandler(async (req: any, res: Response) => {
-  console.log("🔥 [BACKEND API HIT] POST /api/v1/images/upload called!");
+
 
   if (!req.file) {
     console.log("❌ Error: No file uploaded in upload route");
@@ -223,7 +223,7 @@ export const uploadAndResizeImage = asyncHandler(async (req: any, res: Response)
  */
 export const getJobResultStatus = asyncHandler(async (req: any, res: Response) => {
   const { jobId } = req.params;
-  console.log(`🔍 [STATUS CHECK] Checking status for Job ID: ${jobId}`);
+  console.log(`🔍  Checking status for Job ID: ${jobId}`);
 
   const job = await resizeQueue.getJob(jobId);
 

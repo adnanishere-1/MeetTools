@@ -10,7 +10,7 @@ export interface IImageFile {
 }
 
 export interface IJob extends Document {
-  userId?: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId; // 👈 Ab ye strictly required hoga har job ke liye
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
   inputFiles: IImageFile[];
@@ -47,7 +47,7 @@ const fileSubSchema = new Schema<IImageFile>(
 
 const jobSchema = new Schema<IJob>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: false, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true }, // 👈 required: true kar diya hai
     status: { 
       type: String, 
       enum: ['pending', 'processing', 'completed', 'failed'], 
