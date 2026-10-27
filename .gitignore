@@ -9,9 +9,6 @@ node_modules/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-package-lock.json
-pnpm-lock.yaml
-yarn.lock
 
 # ==========================================
 # Environment Variables & Secrets (CRITICAL)
@@ -37,6 +34,7 @@ out/
 # Frontend (Next.js) Build Outputs
 .next/
 export/
+next-env.d.ts
 
 # ==========================================
 # Logs & Debugging
@@ -102,3 +100,8 @@ coverage/
 .eslintcache
 .stylelintcache
 .turbo
+
+# ==========================================
+# Deployment
+# ==========================================
+.vercel
