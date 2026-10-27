@@ -41,11 +41,9 @@ const userSchema = new Schema<IUser>(
       select: false,
       validate: {
         validator: function (value: string) {
-          // Skip validation if the password is already hashed (e.g., bcrypt hashes start with $2a$, $2b$, or $2y$)
           if (value.startsWith('$2a$') || value.startsWith('$2b$') || value.startsWith('$2y$')) {
             return true;
           }
-          // Validate plain-text password before hashing
           return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(value);
         },
         message: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',

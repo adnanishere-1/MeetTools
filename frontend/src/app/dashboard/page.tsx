@@ -81,9 +81,9 @@ export default function DashboardPage() {
     }
   };
 
-  // 🔄 Datastore Approach: URL Query mein Job ID pass kar rahe hain
+  // 🔄 Fixed: Dynamic route par redirect hoga (/tools/resize/[id])
   const handleReuseJob = (jobId: string) => {
-    router.push(`/tools/image-resizer?jobId=${jobId}`);
+    router.push(`/tools/resize/${jobId}`);
   };
 
   const handleDirectDownload = async (url: string, filename: string) => {

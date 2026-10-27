@@ -62,3 +62,35 @@ export const getUserCredits = asyncHandler(async (req: any, res: Response) => {
     credits: user.credits,
   });
 });
+
+/**
+ * @desc    Update Cookie Consent Status in Database
+ * @route   PUT /api/v1/users/cookie-consent
+ * @access  Private
+ */
+export const updateCookieConsent = asyncHandler(async (req: any, res: Response) => {
+  const { consent } = req.body; // 'accepted' or 'rejected'
+
+  if (!['accepted', 'rejected'].includes(consent)) {
+    throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Invalid consent value');
+  }
+
+  const user = await User.findById(req.user.id);
+  if (!user) {
+    throw new ApiError(STATUS_CODES.NOT_FOUND, 'User not found');
+  }
+
+  user.consents.analyticsConsent = consent === 'accepted';
+  user.consents.marketingConsent = consent === 'accepted';
+  user.consents.termsAndPrivacyAccepted = consent === 'accepted';
+  user.consents.consentGivenAt = new Date();
+  user.consents.ipAddress = req.ip || req.headers['x-forwarded-for']?.toString();
+
+  await user.save();
+
+  return res.status(STATUS_CODES.OK).json({
+    success: true,
+    message: 'Cookie consent updated successfully',
+    consents: user.consents,
+  });
+});

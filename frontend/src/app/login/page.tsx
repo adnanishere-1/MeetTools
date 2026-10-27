@@ -19,22 +19,31 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      // Backend real login API endpoint hit ho raha hai
+      // Real backend login API endpoint hit ho raha hai
       const response = await axios.post("/api/v1/auth/login", {
         email,
         password,
       });
 
-      // Backend se aane wala data (jaise token aur user info)
+      // Backend se aane wala data (token aur user info)
       const { token, user } = response.data;
 
-      // Asli token aur user details localStorage mein save kar rahe hain
-      localStorage.setItem("meettools_user", JSON.stringify(user || { email, loggedIn: true }));
+      // Token aur user details localStorage mein save kar rahe hain
       localStorage.setItem("meettools_token", token);
       localStorage.setItem("token", token); // Backup key for safety
+      if (user) {
+        localStorage.setItem("meettools_user", JSON.stringify(user));
+      }
 
       setLoading(false);
-      window.location.href = "/dashboard";
+
+      // Real Role-based Redirection (Admin vs Normal User)
+      if (user?.role === "admin") {
+        window.location.href = "/admin/dashboard";
+      } else {
+        window.location.href = "/dashboard";
+      }
+
     } catch (err: any) {
       setLoading(false);
       setErrorMsg(err.response?.data?.message || "Invalid email or password. Please try again.");
@@ -50,7 +59,7 @@ export default function LoginPage() {
           
           <div className="text-center mb-8">
             <h1 className="text-3xl font-black text-[#121212] mb-2">Welcome Back</h1>
-            <p className="text-sm text-[#555555]">Sign in to access your image processing dashboard</p>
+            <p className="text-sm text-[#555555]">Sign in to access your dashboard</p>
           </div>
 
           {errorMsg && (
@@ -114,7 +123,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 text-[#888888] hover:text-[#fb8500] transition-colors"
+                  className="absolute right-4 text-[#888888] hover:text-[#fb8500] transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
                 </button>
@@ -124,7 +133,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-2"
+              className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-2 cursor-pointer"
             >
               {loading ? "Signing In..." : "Sign In"}
               {!loading && <ArrowRightIcon size={20} weight="bold" />}

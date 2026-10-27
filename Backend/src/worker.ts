@@ -42,27 +42,19 @@ async function startWorker() {
 
         await bullJob.updateProgress(70);
 
-        // 🗑️ STEP 1: Original file ko ImageKit se delete karna (Storage clean rakhne ke liye)
-        if (fileId) {
-          try {
-            await imagekit.deleteFile(fileId);
-            logger.info(`🗑️ Successfully deleted original file from ImageKit: ${fileId}`);
-          } catch (delErr: any) {
-            logger.error(`⚠️ Failed to delete original file ${fileId}:`, delErr.message);
-          }
-        }
+        // NOTE: Original file deletion yahan se remove kar di gayi hai 
+        // taaki user dashboard par apni file ko dobara 'Reuse' ya 'Resize' kar sake.
 
         await bullJob.updateProgress(100);
         logger.info(`✅ Successfully completed job ID: ${bullJob.id}. Output URL: ${finalOutputUrl}`);
 
-        // Return actual details taaki controller unhe DB mein populate kar sakay
         return {
           success: true,
-          fileId: `resized_${Date.now()}`, // Naya mock ya unique fileId agar zaroorat ho
+          fileId: fileId || `resized_${Date.now()}`,
           url: finalOutputUrl,
           downloadUrl: finalOutputUrl,
           fileName: originalFileName || 'processed-image.webp',
-          fileSize: originalSize || 1024, // Approximate ya transformed size
+          fileSize: originalSize || 1024,
           width: transformations?.width || 800,
           height: transformations?.height || 600,
         };

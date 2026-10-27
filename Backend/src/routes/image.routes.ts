@@ -6,7 +6,7 @@ import {
 } from '../controllers/image.controller.js';
 import { optionalAuthenticate } from '../middlewares/optionalAuth.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
-import { upload } from '../middlewares/multer.middleware.js';
+import { upload, verifyRealImage } from '../middlewares/multer.middleware.js';
 import { apiLimiter } from '../middlewares/rate-limit.middleware.js';
 import { resizeImageSchema } from '../validators/image.validator.js';
 
@@ -15,20 +15,22 @@ const router = Router();
 // Sirf Rate Limiter global rakho
 router.use(apiLimiter);
 
-// Resize route - Guest aur Logged-in dono ke liye (Optional Auth ke sath)
+// Resize route - Guest aur Logged-in dono ke liye (Optional Auth + Magic Number Security Check)
 router.post(
   '/resize',
   optionalAuthenticate, 
   upload.single('image'),
+  verifyRealImage, // 🛡️ Malicious file detection check
   validate(resizeImageSchema),
   resizeImage
 );
 
-// Upload & resize route
+// Upload & resize route (+ Magic Number Security Check)
 router.post(
   '/upload',
   optionalAuthenticate,
   upload.single('image'),
+  verifyRealImage, // 🛡️ Malicious file detection check
   validate(resizeImageSchema),
   uploadAndResizeImage
 );

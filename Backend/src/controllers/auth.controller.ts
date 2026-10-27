@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import disposableDomains from 'disposable-email-domains';
 import { User } from '../models/User.model.js';
 import { ActivityLog } from '../models/ActivityLog.model.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -17,6 +18,15 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
   if (!name || !email || !password) {
     throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Name, email, and password are required');
+  }
+
+  // 🛡️ Temp Mail / Disposable Email Block Check
+  const emailDomain = email.split('@')[1]?.toLowerCase();
+  if (!emailDomain || disposableDomains.includes(emailDomain)) {
+    throw new ApiError(
+      STATUS_CODES.BAD_REQUEST, 
+      'Temporary or disposable email addresses are not allowed. Please use a real email address.'
+    );
   }
 
   const existingUser = await User.findOne({ email });
