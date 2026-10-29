@@ -194,19 +194,55 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Email and password are required');
+    throw new ApiError(
+      STATUS_CODES.BAD_REQUEST,
+      'Email and password are required'
+    );
   }
 
-  const user = await User.findOne({ email }).select('+password');
+  const user = await User.findOne({
+    email: String(email).trim().toLowerCase(),
+  }).select('+password');
+
   if (!user || !(await bcrypt.compare(password, user.password || ''))) {
-    throw new ApiError(STATUS_CODES.UNAUTHORIZED, 'Invalid credentials');
+    throw new ApiError(
+      STATUS_CODES.UNAUTHORIZED,
+      'Invalid credentials'
+    );
   }
 
   if (!user.isEmailVerified) {
-    throw new ApiError(STATUS_CODES.FORBIDDEN, 'Please verify your email before logging in');
+    throw new ApiError(
+      STATUS_CODES.FORBIDDEN,
+      'Please verify your email before logging in'
+    );
   }
 
-  const clientIp = (req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress) as string;
+  const jwtSecret = process.env.JWT_SECRET;
+
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+
+  const token = jwt.sign(
+    {
+      id: String(user._id),
+      role: user.role,
+    },
+    jwtSecret,
+    { expiresIn: '7d' }
+  );
+
+  res.cookie('meettools_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  const clientIp =
+    req.ip || req.socket.remoteAddress || 'unknown';
 
   await ActivityLog.create({
     userId: user._id,
@@ -215,16 +251,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     ipAddress: clientIp,
   });
 
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET || 'secret',
-    { expiresIn: '7d' }
-  );
-
   return res.status(STATUS_CODES.OK).json({
     success: true,
     message: 'Logged in successfully',
-    token,
     user: {
       id: user._id,
       name: user.name,
@@ -237,10 +266,11 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  res.clearCookie('token', {
+  res.clearCookie('meettools_token', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
+    path: '/',
   });
 
   return res.status(STATUS_CODES.OK).json({
@@ -248,3 +278,4 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
     message: 'Logged out successfully',
   });
 });
+

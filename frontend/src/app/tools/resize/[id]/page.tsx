@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useParams } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import { ArrowLeftIcon, DownloadSimpleIcon, SlidersHorizontalIcon, SpinnerIcon, SparkleIcon, FileTextIcon, FilePdfIcon, FileArchiveIcon, WrenchIcon, ImagesIcon, CropIcon, PaintBrushIcon, ArrowsClockwiseIcon, FileMinusIcon, FilePlusIcon, MagicWandIcon, ShieldCheckIcon, LightningIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import axios from "axios";
+import { imageService, type ResizeOptions } from "@/services/imageService";
 import { fetchJobById } from "@/services/jobService";
 
 // ─────────────────────────────────────────────────────────────
@@ -44,141 +45,175 @@ const upcomingToolsSections = [
   },
 ];
 
+interface StoredFile { url?: string; fileName?: string; }
+interface StoredJob {
+  inputFiles?: StoredFile[];
+  outputFiles?: StoredFile[];
+  options?: { width?: number; height?: number; outputFormat?: string; format?: string; quality?: number };
+}
+type OutputFormat = NonNullable<ResizeOptions["format"]>;
+
+function getMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.error?.message || error.response?.data?.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function MultiToolWorkspacePage() {
   const params = useParams();
-  const router = useRouter();
-  const jobId = params?.id as string;
-
-  const [loading, setLoading] = useState<boolean>(true);
-  const [processing, setProcessing] = useState<boolean>(false);
-  const [jobData, setJobData] = useState<any>(null);
+  const jobId = typeof params?.id === "string" ? params.id : "";
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [jobData, setJobData] = useState<StoredJob | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Active Tool Selection ('resize' or 'coming-soon')
-  const [activeTool, setActiveTool] = useState<string>("resize");
-
-  // Tool Specific Configurations State
-  const [width, setWidth] = useState<string>("");
-  const [height, setHeight] = useState<string>("");
-  const [format, setFormat] = useState<string>("webp");
-  const [quality, setQuality] = useState<string>("90");
-
-  // Result States
+  const [activeTool, setActiveTool] = useState("resize");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+  const [format, setFormat] = useState<OutputFormat>("webp");
+  const [quality, setQuality] = useState("90");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [downloadName, setDownloadName] = useState<string | null>(null);
+  const [progressMessage, setProgressMessage] = useState("");
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestVersion = useRef(0);
+  const mounted = useRef(true);
+  const busy = useRef(false);
 
-  // 1️⃣ Fetch Job Details from Real API
   useEffect(() => {
-    const loadJobDetails = async () => {
-      if (!jobId) return;
-      try {
-        const token = localStorage.getItem("token") || localStorage.getItem("meettools_token") || "";
-        const job = await fetchJobById(token, jobId);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      requestVersion.current += 1;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+  }, []);
 
-        if (job) {
-          setJobData(job);
-          if (job.options) {
-            setWidth(job.options.width ? String(job.options.width) : "");
-            setHeight(job.options.height ? String(job.options.height) : "");
-            setFormat(job.options.outputFormat || "webp");
-            setQuality(job.options.quality ? String(job.options.quality) : "90");
-          }
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch job details:", err);
-        setError("Failed to load job details or job not found.");
-      } finally {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setJobData(null);
+    const loadJobDetails = async () => {
+      if (!jobId) {
+        setError("Job ID is missing.");
         setLoading(false);
+        return;
+      }
+      try {
+        // Cookie-based authentication is handled by jobService.
+        const response = await fetchJobById(jobId);
+        if (cancelled) return;
+        const job: StoredJob = response?.job || response?.data?.job || response?.data || response;
+        if (!job || !job.inputFiles?.[0]?.url) throw new Error("Source asset not found.");
+        setJobData(job);
+        if (job.options) {
+          setWidth(job.options.width != null ? String(job.options.width) : "");
+          setHeight(job.options.height != null ? String(job.options.height) : "");
+          const originalFormat = job.options.outputFormat || job.options.format || "webp";
+          setFormat((originalFormat === "jpg" ? "jpeg" : originalFormat) as OutputFormat);
+          setQuality(job.options.quality != null ? String(job.options.quality) : "90");
+        }
+      } catch (err: unknown) {
+        if (!cancelled) setError(getMessage(err, "Failed to load job details or job not found."));
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
-
-    loadJobDetails();
+    void loadJobDetails();
+    return () => { cancelled = true; };
   }, [jobId]);
 
-  // 2️⃣ Dynamic Modular Execution Handler (Strictly for Resize tool only)
-  const handleToolSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (activeTool !== "resize") return;
-    if (!jobData || !jobData.inputFiles?.[0]?.url) return;
-
-    setProcessing(true);
-    setResultUrl(null);
-
-    try {
-      const token = localStorage.getItem("token") || localStorage.getItem("meettools_token");
-
-      const imageResponse = await axios.get(jobData.inputFiles[0].url, {
-        responseType: 'blob',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      const blob = imageResponse.data;
-      const file = new File([blob], jobData.inputFiles[0].fileName || "image.jpg", { type: blob.type });
-
-      const formData = new FormData();
-      formData.append("image", file);
-
-      if (width) formData.append("width", width);
-      if (height) formData.append("height", height);
-      formData.append("format", format);
-      formData.append("quality", quality);
-
-      const res = await axios.post("/api/v1/images/resize", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      const newJobId = res.data?.jobId;
-      if (newJobId) {
-        pollJobStatus(newJobId);
-      } else if (res.data?.downloadUrl) {
-        setResultUrl(res.data.downloadUrl);
+  const pollJobStatus = (backgroundJobId: string, version: number) => {
+    const check = async () => {
+      if (!mounted.current || requestVersion.current !== version) return;
+      try {
+        const data = await imageService.checkJobStatus(backgroundJobId);
+        if (!mounted.current || requestVersion.current !== version) return;
+        if (data.status === "completed") {
+          const output = data as typeof data & { downloadUrl?: string; result?: { downloadUrl?: string; fileDetails?: { fileName?: string } }; fileDetails?: { fileName?: string } };
+          const url = output.downloadUrl || output.result?.downloadUrl;
+          if (!url) throw new Error("Processing completed but download URL was not returned.");
+          setResultUrl(url);
+          setDownloadName(output.fileDetails?.fileName || output.result?.fileDetails?.fileName || null);
+          setProgressMessage("Processing completed successfully.");
+          setProcessing(false);
+          busy.current = false;
+          return;
+        }
+        if (data.status === "failed") throw new Error(data.failedReason || "Image processing failed.");
+        setProgressMessage("Background worker is processing your image...");
+        pollTimer.current = setTimeout(check, 2000);
+      } catch (err: unknown) {
+        if (!mounted.current || requestVersion.current !== version) return;
+        setError(getMessage(err, "Unable to check job status."));
         setProcessing(false);
+        busy.current = false;
       }
-    } catch (err: any) {
-      console.error("Failed to process tool action:", err);
-      alert(err.response?.data?.error?.message || "Failed to process image");
+    };
+    pollTimer.current = setTimeout(check, 2000);
+  };
+
+  const handleToolSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (activeTool !== "resize" || busy.current) return;
+    const source = jobData?.inputFiles?.[0];
+    if (!source?.url) { setError("Source image is unavailable."); return; }
+    const parsedWidth = width.trim() ? Number(width) : undefined;
+    const parsedHeight = height.trim() ? Number(height) : undefined;
+    if ([parsedWidth, parsedHeight].some(v => v !== undefined && (!Number.isInteger(v) || v <= 0))) {
+      setError("Width and height must be positive whole numbers.");
+      return;
+    }
+    busy.current = true;
+    requestVersion.current += 1;
+    const version = requestVersion.current;
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    setProcessing(true);
+    setError(null);
+    setResultUrl(null);
+    setDownloadName(null);
+    setProgressMessage("Loading original image...");
+    try {
+      const imageResponse = await fetch(source.url, { credentials: "include" });
+      if (!imageResponse.ok) throw new Error("Failed to fetch original image.");
+      const blob = await imageResponse.blob();
+      if (!mounted.current || requestVersion.current !== version) return;
+      const file = new File([blob], source.fileName || "image.jpg", { type: blob.type || "image/jpeg" });
+      setProgressMessage("Uploading image to processing queue...");
+      const response = await imageService.resizeImage(file, {
+        width: parsedWidth, height: parsedHeight, format, quality: Math.min(100, Math.max(10, Number(quality) || 90)),
+      });
+      if (!mounted.current || requestVersion.current !== version) return;
+      if (response.jobId) {
+        setProgressMessage("Image queued. Waiting for background worker...");
+        pollJobStatus(String(response.jobId), version);
+      } else {
+        throw new Error("Backend did not return a processing job ID.");
+      }
+    } catch (err: unknown) {
+      if (!mounted.current || requestVersion.current !== version) return;
+      setError(getMessage(err, "Failed to process image."));
       setProcessing(false);
+      busy.current = false;
     }
   };
 
-  // 3️⃣ Poll Background Queue Status
-  const pollJobStatus = async (backgroundJobId: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await axios.get(`/api/v1/images/status/${backgroundJobId}`);
-        if (res.data.status === "completed") {
-          clearInterval(interval);
-          setResultUrl(res.data.downloadUrl);
-          setProcessing(false);
-        } else if (res.data.status === "failed") {
-          clearInterval(interval);
-          alert("Processing failed.");
-          setProcessing(false);
-        }
-      } catch (err) {
-        clearInterval(interval);
-        setProcessing(false);
-      }
-    }, 2000);
-  };
-
-  // 4️⃣ Direct Local File Download
   const handleDirectDownload = async (url: string, filename: string) => {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("Download failed.");
       const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = filename || 'processed-image.jpg';
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      window.open(url, '_blank');
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (err: unknown) {
+      setError(getMessage(err, "Unable to download the processed file."));
     }
   };
 
@@ -212,7 +247,6 @@ export default function MultiToolWorkspacePage() {
   }
 
   const originalImageUrl = jobData.inputFiles?.[0]?.url;
-  const outputFileName = jobData.outputFiles?.[0]?.fileName || jobData.inputFiles?.[0]?.fileName || "processed-image.jpg";
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fff3ec] text-[#121212] font-sans">
@@ -314,10 +348,10 @@ export default function MultiToolWorkspacePage() {
                       <label className="block text-xs font-bold text-[#555555] mb-1">Format</label>
                       <select
                         value={format}
-                        onChange={(e) => setFormat(e.target.value)}
+                        onChange={(e) => setFormat(e.target.value as OutputFormat)}
                         className="w-full px-4 py-2.5 rounded-xl border border-[#fb8500]/30 focus:outline-none focus:border-[#fb8500] text-sm bg-white"
                       >
-                        <option value="jpg">JPG</option>
+                        <option value="jpeg">JPG</option>
                         <option value="png">PNG</option>
                         <option value="avif">AVIF</option>
                         <option value="webp">WEBP</option>
@@ -340,7 +374,7 @@ export default function MultiToolWorkspacePage() {
                 {/* ⭐ Process & Export — SIRF Resize tab mein */}
                 <button
                   type="submit"
-                  disabled={processing}
+                  disabled={processing || !jobData?.inputFiles?.[0]?.url}
                   className="w-full mt-4 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[#fb8500] hover:bg-[#e07600] text-white font-bold transition-all shadow-lg shadow-[#fb8500]/30 cursor-pointer disabled:opacity-50"
                 >
                   {processing ? (
@@ -356,12 +390,14 @@ export default function MultiToolWorkspacePage() {
                   )}
                 </button>
 
+                {progressMessage && processing && <p className="text-xs text-[#fb8500] text-center">{progressMessage}</p>}
+                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
                 {resultUrl && (
                   <div className="mt-6 p-4 rounded-2xl bg-[#fff3ec] border border-[#fb8500]/30 text-center animate-fade-in">
                     <p className="text-xs font-bold text-[#fb8500] mb-2">🎉 Processed Successfully!</p>
                     <button
                       type="button"
-                      onClick={() => handleDirectDownload(resultUrl, outputFileName)}
+                      onClick={() => handleDirectDownload(resultUrl, downloadName || `processed-image.${format === "jpeg" ? "jpg" : format}`)}
                       className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#121212] hover:bg-black text-white text-xs font-bold transition-all shadow-md cursor-pointer"
                     >
                       <DownloadSimpleIcon size={16} weight="bold" />

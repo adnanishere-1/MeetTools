@@ -1,20 +1,53 @@
-import pino from 'pino';
 
-const isProduction = process.env.NODE_ENV === 'production';
+import "dotenv/config";
+
+import pino from "pino";
+
+const isProduction =
+  process.env.NODE_ENV === "production";
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  // Development mein readable colored logs ke liye pino-pretty use hoga
+  level:
+    process.env.LOG_LEVEL ||
+    (isProduction ? "info" : "debug"),
+
+  // Sensitive data ko logs mein hide karein
+  redact: {
+    paths: [
+      "req.headers.authorization",
+      "req.headers.cookie",
+      "res.headers['set-cookie']",
+      "password",
+      "token",
+      "accessToken",
+      "refreshToken",
+      "meettools_token",
+      "otp",
+      "*.password",
+      "*.token",
+      "*.accessToken",
+      "*.refreshToken",
+      "*.otp",
+    ],
+    censor: "[REDACTED]",
+  },
+
+  // Development mein pehle wala
+  // colorful, readable logger style
   transport: !isProduction
     ? {
-        target: 'pino-pretty',
+        target: "pino-pretty",
         options: {
           colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname',
+          translateTime: "SYS:standard",
+          ignore: "pid,hostname",
+          singleLine: false,
         },
       }
     : undefined,
-  // Production ke liye standard settings
-  base: isProduction ? { env: 'production' } : undefined,
+
+  // Production mein standard JSON logs
+  base: isProduction
+    ? { env: "production" }
+    : undefined,
 });

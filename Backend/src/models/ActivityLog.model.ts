@@ -1,37 +1,99 @@
-import mongoose, { Schema, Document } from 'mongoose';
+
+import mongoose, {
+  Schema,
+  type Document,
+} from "mongoose";
+
+// =====================================
+// Activity Types
+// =====================================
+
+export type ActivityAction =
+  | "USER_REGISTER"
+  | "USER_LOGIN"
+  | "IMAGE_RESIZE"
+  | "IMAGE_CLEAN"
+  | "CREDIT_DEDUCT";
 
 export interface IActivityLog extends Document {
   userId: mongoose.Types.ObjectId;
-  action: 'USER_REGISTER' | 'USER_LOGIN' | 'IMAGE_RESIZE' | 'IMAGE_CLEAN' | 'CREDIT_DEDUCT';
-  details: Record<string, any>;
+  action: ActivityAction;
+  details: Record<string, unknown>;
   ipAddress?: string;
   createdAt: Date;
 }
 
-const ActivityLogSchema = new Schema<IActivityLog>(
+// =====================================
+// Activity Log Schema
+// =====================================
+
+const ActivityLogSchema =
+  new Schema<IActivityLog>(
+    {
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+
+      action: {
+        type: String,
+        required: true,
+        enum: [
+          "USER_REGISTER",
+          "USER_LOGIN",
+          "IMAGE_RESIZE",
+          "IMAGE_CLEAN",
+          "CREDIT_DEDUCT",
+        ],
+      },
+
+      details: {
+        type: Schema.Types.Mixed,
+        default: () => ({}),
+      },
+
+      ipAddress: {
+        type: String,
+        trim: true,
+        maxlength: 45,
+      },
+    },
+    {
+      timestamps: {
+        createdAt: true,
+        updatedAt: false,
+      },
+      strict: true,
+    }
+  );
+
+// =====================================
+// Indexes
+// =====================================
+
+// Fast activity history for each user.
+// No duplicate inline index on userId.
+ActivityLogSchema.index(
   {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
-    action: {
-      type: String,
-      required: true,
-      enum: ['USER_REGISTER', 'USER_LOGIN', 'IMAGE_RESIZE', 'IMAGE_CLEAN', 'CREDIT_DEDUCT'],
-    },
-    details: {
-      type: Schema.Types.Mixed,
-      default: {},
-    },
-    ipAddress: {
-      type: String,
-    },
+    userId: 1,
+    createdAt: -1,
   },
   {
-    timestamps: { createdAt: true, updatedAt: false },
+    name: "user_activity_created_at",
   }
 );
 
-export const ActivityLog = mongoose.model<IActivityLog>('ActivityLog', ActivityLogSchema);
+// =====================================
+// Model Export
+// =====================================
+
+export const ActivityLog =
+  mongoose.models.ActivityLog
+    ? mongoose.model<IActivityLog>(
+        "ActivityLog"
+      )
+    : mongoose.model<IActivityLog>(
+        "ActivityLog",
+        ActivityLogSchema
+      );

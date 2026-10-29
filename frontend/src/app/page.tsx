@@ -3,60 +3,87 @@
 import { useState, useEffect } from "react";
 import Navbar from "@/components/layout/Navbar";
 import {
-  ArrowRightIcon, UploadSimpleIcon, SlidersHorizontalIcon, DownloadSimpleIcon,
+  UploadSimpleIcon, SlidersHorizontalIcon, DownloadSimpleIcon,
   CookieIcon, SquaresFourIcon, LockIcon, LightningIcon, ClockIcon,
   FolderIcon, CheckCircleIcon, XCircleIcon, CrownIcon,
-  SparkleIcon, FilePdfIcon, ImagesIcon, FileArchiveIcon, ShieldCheckIcon,
+  FilePdfIcon, ImagesIcon, FileArchiveIcon, ShieldCheckIcon,
   RocketIcon, RepeatIcon, UserIcon
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import axios from "axios";
 
+type ConsentStatus = "loading" | "pending" | "accepted" | "rejected";
+
+const CONSENT_COOKIE = "meettools_cookie_consent";
+
+function readConsentCookie(): ConsentStatus | null {
+  const entry = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(`${CONSENT_COOKIE}=`));
+
+  const value = entry?.slice(CONSENT_COOKIE.length + 1);
+  return value === "accepted" || value === "rejected" ? value : null;
+}
+
+function saveConsentCookie(status: "accepted" | "rejected") {
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${CONSENT_COOKIE}=${status}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+}
+
 export default function Home() {
-  const [cookieConsent, setCookieConsent] = useState<string | null>("loading");
+  const [cookieConsent, setCookieConsent] = useState<ConsentStatus>("loading");
 
   useEffect(() => {
+    let active = true;
+
     const checkConsentAndUser = async () => {
-      const token = localStorage.getItem("token") || localStorage.getItem("meettools_token");
+      const savedConsent = readConsentCookie();
 
-      if (token) {
-        try {
-          const response = await axios.get("/api/v1/users/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+      try {
+        const response = await axios.get("/api/v1/users/me", {
+          withCredentials: true,
+        });
 
-          const userData = response.data?.user;
-          if (userData && userData.consents?.consentGivenAt) {
-            const status = userData.consents.termsAndPrivacyAccepted ? "accepted" : "rejected";
+        const userData = response.data?.user;
+        const consents = userData?.consents;
+
+        if (consents?.consentGivenAt) {
+          const status: ConsentStatus = consents.termsAndPrivacyAccepted
+            ? "accepted"
+            : "rejected";
+          if (active) {
             setCookieConsent(status);
-            localStorage.setItem("meettools_cookie_consent", status);
-            return;
+            saveConsentCookie(status);
           }
-        } catch (error) {
-          console.error("Failed to fetch user profile cookie status:", error);
+          return;
+        }
+      } catch (error: unknown) {
+        // Guests are expected to receive 401 from /users/me.
+        if (!axios.isAxiosError(error) || error.response?.status !== 401) {
+          console.error("Could not load cookie consent from profile:", error);
         }
       }
 
-      const localConsent = localStorage.getItem("meettools_cookie_consent");
-      setCookieConsent(localConsent || "pending");
+      if (active) setCookieConsent(savedConsent || "pending");
     };
 
-    checkConsentAndUser();
+    void checkConsentAndUser();
+    return () => { active = false; };
   }, []);
 
   const handleConsentAction = async (consentStatus: "accepted" | "rejected") => {
     setCookieConsent(consentStatus);
-    localStorage.setItem("meettools_cookie_consent", consentStatus);
+    saveConsentCookie(consentStatus);
 
-    const token = localStorage.getItem("token") || localStorage.getItem("meettools_token");
-    if (token) {
-      try {
-        await axios.put(
-          "/api/v1/users/cookie-consent",
-          { consent: consentStatus },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      } catch (error) {
+    try {
+      await axios.put(
+        "/api/v1/users/cookie-consent",
+        { consent: consentStatus },
+        { withCredentials: true }
+      );
+    } catch (error: unknown) {
+      // Guests may not have an authenticated profile to update.
+      if (!axios.isAxiosError(error) || error.response?.status !== 401) {
         console.error("Failed to save cookie consent to database:", error);
       }
     }

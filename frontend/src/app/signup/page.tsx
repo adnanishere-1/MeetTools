@@ -1,41 +1,53 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
-import { 
-  UserIcon, 
-  EnvelopeSimpleIcon, 
-  LockSimpleIcon, 
-  EyeIcon, 
-  EyeSlashIcon, 
-  ArrowRightIcon, 
+
+import {
+  UserIcon,
+  EnvelopeSimpleIcon,
+  LockSimpleIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  ArrowRightIcon,
   ShieldCheckIcon,
   CheckIcon,
-  XIcon
+  XIcon,
 } from "@phosphor-icons/react/dist/ssr";
+
 import { useAuth } from "@/hooks/useAuth";
 
 export default function SignUpPage() {
   const [step, setStep] = useState<"form" | "otp">("form");
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
-  
+
   // Consent States
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [analyticsConsent, setAnalyticsConsent] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
 
-  // Resend OTP timer states
+  // OTP Resend Timer
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
-  const { signupUser, verifyOtp, resendOtp, loading, error } = useAuth();
+  // Original authentication hook
+  const {
+    signupUser,
+    verifyOtp,
+    resendOtp,
+    loading,
+    error,
+  } = useAuth();
 
-  // Password Rules Check
+  // Password Rules
   const rules = {
     minLength: password.length >= 8,
     hasUpper: /[A-Z]/.test(password),
@@ -46,69 +58,117 @@ export default function SignUpPage() {
 
   const isPasswordStrong = Object.values(rules).every(Boolean);
 
+  // OTP countdown
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (step === "otp" && resendTimer > 0) {
-      timer = setInterval(() => {
-        setResendTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (resendTimer === 0) {
-      setCanResend(true);
+    if (step !== "otp" || resendTimer <= 0) {
+      if (step === "otp" && resendTimer === 0) {
+        setCanResend(true);
+      }
+      return;
     }
-    return () => clearInterval(timer);
+
+    const timer = setTimeout(() => {
+      setResendTimer((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearTimeout(timer);
   }, [step, resendTimer]);
 
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
+  // Register User
+  const handleRegisterSubmit = async (
+    e: FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
-    
+
     if (!isPasswordStrong) {
-      alert("Please ensure your password meets all security criteria.");
+      alert(
+        "Please ensure your password meets all security criteria."
+      );
       return;
     }
 
     if (!termsAccepted) {
-      alert("Please accept the Terms & Conditions and Privacy Policy to continue.");
+      alert(
+        "Please accept the Terms & Conditions and Privacy Policy to continue."
+      );
       return;
     }
 
-    const res = await signupUser(fullName, email, password, {
-      termsAndPrivacyAccepted: termsAccepted,
-      analyticsConsent,
-      marketingConsent,
-    });
+    const normalizedEmail = email.trim().toLowerCase();
 
-    if (res.success) {
-      localStorage.setItem("meettools_temp_email", email);
-      setStep("otp");
-      setResendTimer(60);
-      setCanResend(false);
-    } else {
-      alert(res.message || "Failed to register. Please try again.");
+    try {
+      const res = await signupUser(
+        fullName.trim(),
+        normalizedEmail,
+        password,
+        {
+          termsAndPrivacyAccepted: termsAccepted,
+          analyticsConsent,
+          marketingConsent,
+        }
+      );
+
+      if (res.success) {
+        // Email stays in React state only
+        setEmail(normalizedEmail);
+        setOtp("");
+        setStep("otp");
+        setResendTimer(60);
+        setCanResend(false);
+      } else {
+        alert(
+          res.message ||
+            "Failed to register. Please try again."
+        );
+      }
+    } catch {
+      alert("Registration failed. Please try again.");
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  // Verify Email OTP
+  const handleVerifyOtp = async (
+    e: FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
-    if (otp.length !== 6) {
+
+    if (!/^\d{6}$/.test(otp)) {
       alert("Please enter a valid 6-digit verification code.");
       return;
     }
 
-    const res = await verifyOtp(email, otp);
-    if (!res.success) {
-      alert(res.message || "Invalid OTP code.");
+    try {
+      const res = await verifyOtp(email, otp);
+
+      if (!res.success) {
+        alert(res.message || "Invalid OTP code.");
+      }
+      // Successful navigation remains handled by useAuth.
+    } catch {
+      alert("OTP verification failed. Please try again.");
     }
   };
 
+  // Resend OTP
   const handleResendOtpCode = async () => {
-    if (!canResend) return;
-    const res = await resendOtp(email);
-    if (res.success) {
-      alert("Verification code has been successfully resent to your email.");
-      setResendTimer(60);
-      setCanResend(false);
-    } else {
-      alert(res.message || "Failed to resend OTP.");
+    if (!canResend || loading) return;
+
+    try {
+      const res = await resendOtp(email);
+
+      if (res.success) {
+        alert(
+          "Verification code has been successfully resent to your email."
+        );
+
+        setOtp("");
+        setResendTimer(60);
+        setCanResend(false);
+      } else {
+        alert(res.message || "Failed to resend OTP.");
+      }
+    } catch {
+      alert("Failed to resend OTP. Please try again.");
     }
   };
 
@@ -118,7 +178,7 @@ export default function SignUpPage() {
 
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5">
-          
+
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-semibold">
               {error}
@@ -128,8 +188,12 @@ export default function SignUpPage() {
           {step === "form" ? (
             <>
               <div className="text-center mb-8">
-                <h1 className="text-3xl font-black text-[#121212] mb-2">Create Account</h1>
-                <p className="text-sm text-[#555555]">Start optimizing your media pipeline today</p>
+                <h1 className="text-3xl font-black text-[#121212] mb-2">
+                  Create Account
+                </h1>
+                <p className="text-sm text-[#555555]">
+                  Start optimizing your media pipeline today
+                </p>
               </div>
 
               <div className="flex bg-[#fff3ec] p-1.5 rounded-2xl mb-8 border border-[#fb8500]/10">
@@ -139,6 +203,7 @@ export default function SignUpPage() {
                 >
                   Sign In
                 </Link>
+
                 <Link
                   href="/signup"
                   className="flex-1 text-center py-2.5 rounded-xl font-bold text-sm bg-[#fb8500] text-white shadow-md transition-all"
@@ -147,13 +212,22 @@ export default function SignUpPage() {
                 </Link>
               </div>
 
-              <form onSubmit={handleRegisterSubmit} className="space-y-5">
+              <form
+                onSubmit={handleRegisterSubmit}
+                className="space-y-5"
+              >
+                {/* Full Name */}
                 <div>
                   <label className="block text-xs font-bold text-[#333333] mb-2 uppercase tracking-wider">
                     Full Name
                   </label>
+
                   <div className="relative flex items-center">
-                    <UserIcon size={20} className="absolute left-4 text-[#fb8500]" />
+                    <UserIcon
+                      size={20}
+                      className="absolute left-4 text-[#fb8500]"
+                    />
+
                     <input
                       type="text"
                       required
@@ -165,12 +239,18 @@ export default function SignUpPage() {
                   </div>
                 </div>
 
+                {/* Email Address */}
                 <div>
                   <label className="block text-xs font-bold text-[#333333] mb-2 uppercase tracking-wider">
                     Email Address
                   </label>
+
                   <div className="relative flex items-center">
-                    <EnvelopeSimpleIcon size={20} className="absolute left-4 text-[#fb8500]" />
+                    <EnvelopeSimpleIcon
+                      size={20}
+                      className="absolute left-4 text-[#fb8500]"
+                    />
+
                     <input
                       type="email"
                       required
@@ -182,12 +262,18 @@ export default function SignUpPage() {
                   </div>
                 </div>
 
+                {/* Password */}
                 <div>
                   <label className="block text-xs font-bold text-[#333333] mb-2 uppercase tracking-wider">
                     Password
                   </label>
+
                   <div className="relative flex items-center">
-                    <LockSimpleIcon size={20} className="absolute left-4 text-[#fb8500]" />
+                    <LockSimpleIcon
+                      size={20}
+                      className="absolute left-4 text-[#fb8500]"
+                    />
+
                     <input
                       type={showPassword ? "text" : "password"}
                       required
@@ -196,49 +282,83 @@ export default function SignUpPage() {
                       placeholder="8+ chars, Uppercase, Number, Special"
                       className="w-full pl-12 pr-12 py-3.5 bg-[#fff3ec]/50 border border-[#fb8500]/20 rounded-2xl text-sm focus:outline-none focus:border-[#fb8500] focus:bg-white transition-all text-[#121212]"
                     />
+
                     <button
                       type="button"
+                      aria-label={
+                        showPassword
+                          ? "Hide password"
+                          : "Show password"
+                      }
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 text-[#888888] hover:text-[#fb8500]"
                     >
-                      {showPassword ? <EyeSlashIcon size={20} /> : <EyeIcon size={20} />}
+                      {showPassword ? (
+                        <EyeSlashIcon size={20} />
+                      ) : (
+                        <EyeIcon size={20} />
+                      )}
                     </button>
                   </div>
 
-                  {/* Single-Line Compact Password Requirement Badges */}
+                  {/* Password Requirements */}
                   {password.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.minLength ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                        {rules.minLength ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} 8+ Chars
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasUpper ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                        {rules.hasUpper ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Uppercase
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasLower ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                        {rules.hasLower ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Lowercase
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasNumber ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                        {rules.hasNumber ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Number
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${rules.hasSpecial ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                        {rules.hasSpecial ? <CheckIcon size={12} weight="bold" /> : <XIcon size={12} />} Special (!@#$)
-                      </span>
+                      {[
+                        { label: "8+ Chars", valid: rules.minLength },
+                        { label: "Uppercase", valid: rules.hasUpper },
+                        { label: "Lowercase", valid: rules.hasLower },
+                        { label: "Number", valid: rules.hasNumber },
+                        { label: "Special (!@#$)", valid: rules.hasSpecial },
+                      ].map((rule) => (
+                        <span
+                          key={rule.label}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                            rule.valid
+                              ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                              : "bg-gray-50 text-gray-400 border-gray-200"
+                          }`}
+                        >
+                          {rule.valid ? (
+                            <CheckIcon size={12} weight="bold" />
+                          ) : (
+                            <XIcon size={12} />
+                          )}
+                          {rule.label}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
 
-                {/* Terms and Consents Checkboxes */}
+                {/* Terms and Consents */}
                 <div className="space-y-3 pt-2 text-xs">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       required
                       checked={termsAccepted}
-                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      onChange={(e) =>
+                        setTermsAccepted(e.target.checked)
+                      }
                       className="mt-0.5 accent-[#fb8500] rounded"
                     />
+
                     <span className="text-[#555555]">
-                      I agree to the <Link href="/terms" className="text-[#fb8500] underline font-bold">Terms & Conditions</Link> and <Link href="/privacy" className="text-[#fb8500] underline font-bold">Privacy Policy</Link>.
+                      I agree to the{" "}
+                      <Link
+                        href="/terms"
+                        className="text-[#fb8500] underline font-bold"
+                      >
+                        Terms & Conditions
+                      </Link>{" "}
+                      and{" "}
+                      <Link
+                        href="/privacy"
+                        className="text-[#fb8500] underline font-bold"
+                      >
+                        Privacy Policy
+                      </Link>.
                     </span>
                   </label>
 
@@ -246,11 +366,15 @@ export default function SignUpPage() {
                     <input
                       type="checkbox"
                       checked={analyticsConsent}
-                      onChange={(e) => setAnalyticsConsent(e.target.checked)}
+                      onChange={(e) =>
+                        setAnalyticsConsent(e.target.checked)
+                      }
                       className="mt-0.5 accent-[#fb8500] rounded"
                     />
+
                     <span className="text-[#555555]">
-                      Allow analytics cookies to help us improve platform performance.
+                      Allow analytics cookies to help us improve
+                      platform performance.
                     </span>
                   </label>
 
@@ -258,53 +382,80 @@ export default function SignUpPage() {
                     <input
                       type="checkbox"
                       checked={marketingConsent}
-                      onChange={(e) => setMarketingConsent(e.target.checked)}
+                      onChange={(e) =>
+                        setMarketingConsent(e.target.checked)
+                      }
                       className="mt-0.5 accent-[#fb8500] rounded"
                     />
+
                     <span className="text-[#555555]">
-                      Receive product updates, new features, and tool recommendations.
+                      Receive product updates, new features, and
+                      tool recommendations.
                     </span>
                   </label>
                 </div>
 
+                {/* Register Button */}
                 <button
                   type="submit"
                   disabled={loading || !isPasswordStrong}
                   className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-4 disabled:opacity-50"
                 >
                   {loading ? "Sending OTP..." : "Continue"}
-                  {!loading && <ArrowRightIcon size={20} weight="bold" />}
+
+                  {!loading && (
+                    <ArrowRightIcon size={20} weight="bold" />
+                  )}
                 </button>
               </form>
 
               <p className="text-center text-xs text-[#777777] mt-6">
                 Already have an account?{" "}
-                <Link href="/login" className="font-bold text-[#fb8500] hover:underline">
+                <Link
+                  href="/login"
+                  className="font-bold text-[#fb8500] hover:underline"
+                >
                   Sign In
                 </Link>
               </p>
             </>
           ) : (
-            /* OTP Verification Step */
             <>
+              {/* OTP Verification */}
               <div className="text-center mb-8">
                 <div className="w-16 h-16 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#fb8500]/20">
                   <ShieldCheckIcon size={32} weight="duotone" />
                 </div>
-                <h1 className="text-2xl font-black text-[#121212] mb-2">Verify Your Email</h1>
+
+                <h1 className="text-2xl font-black text-[#121212] mb-2">
+                  Verify Your Email
+                </h1>
+
                 <p className="text-sm text-[#555555]">
-                  We have sent a 6-digit verification code to <span className="font-bold text-[#121212]">{email}</span>
+                  We have sent a 6-digit verification code to{" "}
+                  <span className="font-bold text-[#121212]">
+                    {email}
+                  </span>
                 </p>
               </div>
 
-              <form onSubmit={handleVerifyOtp} className="space-y-6">
+              <form
+                onSubmit={handleVerifyOtp}
+                className="space-y-6"
+              >
                 <div>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
                     maxLength={6}
                     required
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={(e) =>
+                      setOtp(
+                        e.target.value.replace(/\D/g, "").slice(0, 6)
+                      )
+                    }
                     placeholder="123456"
                     className="w-full py-4 text-center tracking-[1em] text-2xl font-black bg-[#fff3ec]/50 border border-[#fb8500]/20 rounded-2xl focus:outline-none focus:border-[#fb8500] text-[#121212]"
                   />
@@ -316,7 +467,10 @@ export default function SignUpPage() {
                   className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base disabled:opacity-50"
                 >
                   {loading ? "Verifying..." : "Verify & Proceed"}
-                  {!loading && <ArrowRightIcon size={20} weight="bold" />}
+
+                  {!loading && (
+                    <ArrowRightIcon size={20} weight="bold" />
+                  )}
                 </button>
 
                 <div className="text-center flex flex-col gap-3 pt-2 border-t border-[#fb8500]/10 mt-6">
@@ -325,11 +479,16 @@ export default function SignUpPage() {
                     onClick={handleResendOtpCode}
                     disabled={!canResend || loading}
                     className={`text-xs font-bold transition-colors ${
-                      canResend ? "text-[#fb8500] hover:underline cursor-pointer" : "text-gray-400 cursor-not-allowed"
+                      canResend
+                        ? "text-[#fb8500] hover:underline cursor-pointer"
+                        : "text-gray-400 cursor-not-allowed"
                     }`}
                   >
-                    {canResend ? "Didn't receive code? Resend OTP" : `Resend code available in ${resendTimer}s`}
+                    {canResend
+                      ? "Didn't receive code? Resend OTP"
+                      : `Resend code available in ${resendTimer}s`}
                   </button>
+
                   <button
                     type="button"
                     onClick={() => setStep("form")}
@@ -341,7 +500,6 @@ export default function SignUpPage() {
               </form>
             </>
           )}
-
         </div>
       </main>
     </div>

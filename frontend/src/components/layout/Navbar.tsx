@@ -1,47 +1,96 @@
+
 "use client";
 
 import Link from "next/link";
-import { ListIcon, X, UserCircleIcon, SignOutIcon, CrownIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  ListIcon,
+  X,
+  UserCircleIcon,
+  SignOutIcon,
+  CrownIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { useState, useEffect } from "react";
 import axios from "axios";
 
+interface User {
+  id?: string;
+  _id?: string;
+  name: string;
+  email: string;
+  role: "admin" | "user";
+}
+
+interface SessionResponse {
+  user?: User;
+  data?: {
+    user?: User;
+  };
+}
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     const fetchUserSession = async () => {
       try {
-        const token = localStorage.getItem("meettools_token") || localStorage.getItem("token");
-        if (!token) {
-          setLoading(false);
-          return;
-        }
+        const response = await axios.get<SessionResponse>(
+          "/api/v1/users/me",
+          {
+            withCredentials: true,
+          }
+        );
 
-        const response = await axios.get("/api/v1/users/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        if (!active) return;
 
-        setUser(response.data?.user || response.data);
+        const currentUser =
+          response.data.user ||
+          response.data.data?.user ||
+          null;
+
+        setUser(currentUser);
       } catch (error) {
-        console.error("Session check failed:", error);
-        localStorage.removeItem("meettools_token");
-        localStorage.removeItem("token");
+        if (!active) return;
+
         setUser(null);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
     fetchUserSession();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("meettools_token");
-    localStorage.removeItem("token");
-    setUser(null);
-    window.location.href = "/";
+  const handleLogout = async () => {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      await axios.post(
+        "/api/v1/auth/logout",
+        {},
+        {
+          withCredentials: true,
+        }
+      );
+
+      setUser(null);
+      window.location.replace("/");
+    } catch (error) {
+      alert("Logout failed. Please try again.");
+      setLoggingOut(false);
+    }
   };
 
   const isAdmin = user?.role === "admin";
@@ -49,14 +98,17 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[#fb8500]/20 shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        
+
         {/* Continuous Rotating Processing Badge + Brand Logo */}
-        <Link href={isAdmin ? "/admin/dashboard" : "/"} className="flex items-center gap-3 group">
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 220 46" 
-            width="200" 
-            height="42" 
+        <Link
+          href={isAdmin ? "/admin/dashboard" : "/"}
+          className="flex items-center gap-3 group"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 220 46"
+            width="200"
+            height="42"
             className="overflow-visible"
           >
             <style>
@@ -82,81 +134,155 @@ export default function Navbar() {
             </style>
 
             <defs>
-              <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#FB8500" />
-                <stop offset="50%" stopColor="#FFB703" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#FB8500" />
+              <linearGradient
+                id="ringGradient"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="#FB8500"
+                />
+
+                <stop
+                  offset="50%"
+                  stopColor="#FFB703"
+                  stopOpacity="0.2"
+                />
+
+                <stop
+                  offset="100%"
+                  stopColor="#FB8500"
+                />
               </linearGradient>
 
-              <filter id="darkShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="#121212" floodOpacity="0.3" />
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#FB8500" floodOpacity="0.4" />
+              <filter
+                id="darkShadow"
+                x="-20%"
+                y="-20%"
+                width="140%"
+                height="140%"
+              >
+                <feDropShadow
+                  dx="0"
+                  dy="4"
+                  stdDeviation="5"
+                  floodColor="#121212"
+                  floodOpacity="0.3"
+                />
+
+                <feDropShadow
+                  dx="0"
+                  dy="2"
+                  stdDeviation="3"
+                  floodColor="#FB8500"
+                  floodOpacity="0.4"
+                />
               </filter>
             </defs>
 
             <g transform="translate(3, 3)">
-              <circle cx="20" cy="20" r="19" fill="#FB8500" opacity="0.25" className="pulse-bg" />
-              <circle cx="20" cy="20" r="17" fill="#121212" filter="url(#darkShadow)" />
-              <circle 
-                cx="20" 
-                cy="20" 
-                r="15" 
-                fill="none" 
-                stroke="url(#ringGradient)" 
-                strokeWidth="2.5" 
-                strokeDasharray="60 30" 
-                strokeLinecap="round" 
-                className="rotating-ring" 
+              <circle
+                cx="20"
+                cy="20"
+                r="19"
+                fill="#FB8500"
+                opacity="0.25"
+                className="pulse-bg"
               />
-              <text 
-                x="20" 
-                y="25" 
-                fontFamily="system-ui, -apple-system, sans-serif" 
-                fontSize="12" 
-                fontWeight="900" 
-                fill="#FFFFFF" 
+
+              <circle
+                cx="20"
+                cy="20"
+                r="17"
+                fill="#121212"
+                filter="url(#darkShadow)"
+              />
+
+              <circle
+                cx="20"
+                cy="20"
+                r="15"
+                fill="none"
+                stroke="url(#ringGradient)"
+                strokeWidth="2.5"
+                strokeDasharray="60 30"
+                strokeLinecap="round"
+                className="rotating-ring"
+              />
+
+              <text
+                x="20"
+                y="25"
+                fontFamily="system-ui, -apple-system, sans-serif"
+                fontSize="12"
+                fontWeight="900"
+                fill="#FFFFFF"
                 textAnchor="middle"
               >
                 MT
               </text>
             </g>
 
-            <text 
-              x="52" 
-              y="28" 
-              fontFamily="system-ui, -apple-system, sans-serif" 
-              fontSize="22" 
-              fontWeight="900" 
-              fill="#121212" 
+            <text
+              x="52"
+              y="28"
+              fontFamily="system-ui, -apple-system, sans-serif"
+              fontSize="22"
+              fontWeight="900"
+              fill="#121212"
               letterSpacing="-0.7"
             >
-              Meet<tspan fill="#FB8500">Tools</tspan>
+              Meet
+              <tspan fill="#FB8500">
+                Tools
+              </tspan>
             </text>
           </svg>
         </Link>
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8">
-          {isAdmin ? (
-            // Admin ke liye Home aur Tools hide, sirf Admin Dashboard
-            <Link href="/admin/dashboard" className="text-sm font-bold text-[#fb8500] flex items-center gap-1.5">
-              <CrownIcon size={18} weight="fill" /> Admin Control Panel
-            </Link>
-          ) : (
-            // Normal Users ke liye
-            <>
-              <Link href="/" className="text-sm font-semibold text-[#333333] hover:text-[#fb8500] transition-colors">
-                Home
+          {!loading && (
+            isAdmin ? (
+              <Link
+                href="/admin/dashboard"
+                className="text-sm font-bold text-[#fb8500] flex items-center gap-1.5"
+              >
+                <CrownIcon
+                  size={18}
+                  weight="fill"
+                />
+                Admin Control Panel
               </Link>
-              <Link href="/tools" className="text-sm font-semibold text-[#333333] hover:text-[#fb8500] transition-colors">
-                Tools
-              </Link>
-              {!loading && user && (
-                <Link href="/dashboard" className="text-sm font-semibold text-[#333333] hover:text-[#fb8500] transition-colors">
-                  Dashboard
+            ) : (
+              <>
+                <Link
+                  href="/"
+                  className="text-sm font-semibold text-[#333333] hover:text-[#fb8500] transition-colors"
+                >
+                  Home
                 </Link>
-              )}
-            </>
+
+                <Link
+                  href="/tools"
+                  className="text-sm font-semibold text-[#333333] hover:text-[#fb8500] transition-colors"
+                >
+                  Tools
+                </Link>
+
+                {user && (
+                  <Link
+                    href="/dashboard"
+                    className="text-sm font-semibold text-[#333333] hover:text-[#fb8500] transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                )}
+              </>
+            )
           )}
         </div>
 
@@ -165,27 +291,48 @@ export default function Navbar() {
           {!loading && user ? (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm font-bold text-[#121212]">
-                <UserCircleIcon size={24} className="text-[#fb8500]" weight="fill" />
-                <span>{user.name || "Account"}</span>
+                <UserCircleIcon
+                  size={24}
+                  className="text-[#fb8500]"
+                  weight="fill"
+                />
+
+                <span>
+                  {user.name || "Account"}
+                </span>
+
                 {isAdmin && (
                   <span className="px-2 py-0.5 bg-[#fb8500]/10 text-[#fb8500] border border-[#fb8500]/30 rounded-full text-[10px] uppercase font-black">
                     Admin
                   </span>
                 )}
               </div>
+
               <button
                 onClick={handleLogout}
+                disabled={loggingOut}
                 className="px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-1 border border-red-200 cursor-pointer"
               >
-                <SignOutIcon size={16} /> Logout
+                <SignOutIcon size={16} />
+
+                {loggingOut
+                  ? "Logging out..."
+                  : "Logout"}
               </button>
             </div>
           ) : !loading && (
             <>
-              <Link href="/login" className="px-5 py-2.5 text-sm font-bold text-[#333333] hover:text-[#fb8500] transition-colors">
+              <Link
+                href="/login"
+                className="px-5 py-2.5 text-sm font-bold text-[#333333] hover:text-[#fb8500] transition-colors"
+              >
                 Sign In
               </Link>
-              <Link href="/signup" className="px-5 py-2.5 text-sm font-bold text-white bg-[#fb8500] hover:bg-[#e07600] rounded-xl transition-all shadow-lg shadow-[#fb8500]/30">
+
+              <Link
+                href="/signup"
+                className="px-5 py-2.5 text-sm font-bold text-white bg-[#fb8500] hover:bg-[#e07600] rounded-xl transition-all shadow-lg shadow-[#fb8500]/30"
+              >
                 Get Started
               </Link>
             </>
@@ -193,37 +340,96 @@ export default function Navbar() {
         </div>
 
         {/* Mobile Menu Button */}
-        <button onClick={() => setIsOpen(!isOpen)} className="md:hidden p-2 text-[#333333] focus:outline-none cursor-pointer">
-          {isOpen ? <X size={26} /> : <ListIcon size={26} />}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label={
+            isOpen ? "Close menu" : "Open menu"
+          }
+          className="md:hidden p-2 text-[#333333] focus:outline-none cursor-pointer"
+        >
+          {isOpen ? (
+            <X size={26} />
+          ) : (
+            <ListIcon size={26} />
+          )}
         </button>
       </div>
 
       {/* Mobile Dropdown */}
       {isOpen && (
         <div className="md:hidden bg-white border-b border-[#fb8500]/20 px-6 py-6 flex flex-col gap-4 shadow-xl">
-          {isAdmin ? (
-            <Link href="/admin/dashboard" onClick={() => setIsOpen(false)} className="text-base font-bold text-[#fb8500] flex items-center gap-2">
-              <CrownIcon size={18} weight="fill" /> Admin Control Panel
-            </Link>
-          ) : (
-            <>
-              <Link href="/" onClick={() => setIsOpen(false)} className="text-base font-semibold text-[#333333]">Home</Link>
-              <Link href="/tools" onClick={() => setIsOpen(false)} className="text-base font-semibold text-[#333333]">Tools</Link>
-              {!loading && user && (
-                <Link href="/dashboard" onClick={() => setIsOpen(false)} className="text-base font-semibold text-[#333333]">Dashboard</Link>
-              )}
-            </>
+          {!loading && (
+            isAdmin ? (
+              <Link
+                href="/admin/dashboard"
+                onClick={() => setIsOpen(false)}
+                className="text-base font-bold text-[#fb8500] flex items-center gap-2"
+              >
+                <CrownIcon
+                  size={18}
+                  weight="fill"
+                />
+                Admin Control Panel
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/"
+                  onClick={() => setIsOpen(false)}
+                  className="text-base font-semibold text-[#333333]"
+                >
+                  Home
+                </Link>
+
+                <Link
+                  href="/tools"
+                  onClick={() => setIsOpen(false)}
+                  className="text-base font-semibold text-[#333333]"
+                >
+                  Tools
+                </Link>
+
+                {user && (
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setIsOpen(false)}
+                    className="text-base font-semibold text-[#333333]"
+                  >
+                    Dashboard
+                  </Link>
+                )}
+              </>
+            )
           )}
-          
+
           <div className="flex flex-col gap-3 pt-4 border-t border-[#fb8500]/10">
             {!loading && user ? (
-              <button onClick={handleLogout} className="text-center py-2.5 text-sm font-bold text-red-500 bg-red-50 rounded-xl border border-red-200">
-                Logout
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="text-center py-2.5 text-sm font-bold text-red-500 bg-red-50 rounded-xl border border-red-200"
+              >
+                {loggingOut
+                  ? "Logging out..."
+                  : "Logout"}
               </button>
             ) : !loading && (
               <>
-                <Link href="/login" onClick={() => setIsOpen(false)} className="text-center py-2 text-sm font-bold text-[#333333]">Sign In</Link>
-                <Link href="/signup" onClick={() => setIsOpen(false)} className="text-center py-3 text-sm font-bold text-white bg-[#fb8500] rounded-xl shadow-md">Get Started</Link>
+                <Link
+                  href="/login"
+                  onClick={() => setIsOpen(false)}
+                  className="text-center py-2 text-sm font-bold text-[#333333]"
+                >
+                  Sign In
+                </Link>
+
+                <Link
+                  href="/signup"
+                  onClick={() => setIsOpen(false)}
+                  className="text-center py-3 text-sm font-bold text-white bg-[#fb8500] rounded-xl shadow-md"
+                >
+                  Get Started
+                </Link>
               </>
             )}
           </div>

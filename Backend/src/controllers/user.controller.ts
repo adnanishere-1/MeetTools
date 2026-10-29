@@ -1,96 +1,278 @@
-import { Response } from 'express';
-import { User } from '../models/User.model.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { ApiError } from '../utils/ApiError.js';
-import { STATUS_CODES } from '../utils/statusCodes.js';
 
-/**
- * @desc    Get Current User Profile
- * @route   GET /api/v1/users/me
- * @access  Private
- */
-export const getProfile = asyncHandler(async (req: any, res: Response) => {
-  const user = await User.findById(req.user.id);
-  if (!user) {
-    throw new ApiError(STATUS_CODES.NOT_FOUND, 'User not found');
+import mongoose from "mongoose";
+
+import type {
+  Request,
+  Response,
+} from "express";
+
+import { User } from "../models/User.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import { STATUS_CODES } from "../utils/statusCodes.js";
+
+// =====================================
+// Types & Helpers
+// =====================================
+
+type AuthenticatedRequest = Request & {
+  user?: {
+    id: string;
+  };
+};
+
+const getUserId = (
+  req: AuthenticatedRequest
+): string => {
+  const userId = req.user?.id;
+
+  if (
+    !userId ||
+    !mongoose.isValidObjectId(userId)
+  ) {
+    throw new ApiError(
+      STATUS_CODES.UNAUTHORIZED,
+      "Unauthorized. Please log in."
+    );
   }
 
-  return res.status(STATUS_CODES.OK).json({
-    success: true,
-    user,
-  });
-});
+  return userId;
+};
 
-/**
- * @desc    Update User Profile details (Name, Avatar)
- * @route   PUT /api/v1/users/me
- * @access  Private
- */
-export const updateProfile = asyncHandler(async (req: any, res: Response) => {
-  const { name, avatar } = req.body;
+const safeUserFields =
+  "name email role isEmailVerified avatar credits consents createdAt updatedAt";
 
-  const user = await User.findById(req.user.id);
-  if (!user) {
-    throw new ApiError(STATUS_CODES.NOT_FOUND, 'User not found');
+// =====================================
+// Get Current User Profile
+// GET /api/v1/users/me
+// =====================================
+
+export const getProfile = asyncHandler(
+  async (
+    req: AuthenticatedRequest,
+    res: Response
+  ) => {
+    const userId = getUserId(req);
+
+    const user = await User.findById(
+      userId
+    )
+      .select(safeUserFields)
+      .lean();
+
+    if (!user) {
+      throw new ApiError(
+        STATUS_CODES.NOT_FOUND,
+        "User not found"
+      );
+    }
+
+    return res
+      .status(STATUS_CODES.OK)
+      .json({
+        success: true,
+        user,
+      });
   }
+);
 
-  if (name) user.name = name;
-  if (avatar) user.avatar = avatar;
+// =====================================
+// Update User Profile
+// PUT /api/v1/users/me
+// =====================================
 
-  await user.save();
+export const updateProfile = asyncHandler(
+  async (
+    req: AuthenticatedRequest,
+    res: Response
+  ) => {
+    const userId = getUserId(req);
 
-  return res.status(STATUS_CODES.OK).json({
-    success: true,
-    message: 'Profile updated successfully',
-    user,
-  });
-});
+    const { name, avatar } =
+      req.body ?? {};
 
-/**
- * @desc    Get User Remaining Credits
- * @route   GET /api/v1/users/credits
- * @access  Private
- */
-export const getUserCredits = asyncHandler(async (req: any, res: Response) => {
-  const user = await User.findById(req.user.id).select('credits');
-  if (!user) {
-    throw new ApiError(STATUS_CODES.NOT_FOUND, 'User not found');
+    if (
+      name === undefined &&
+      avatar === undefined
+    ) {
+      throw new ApiError(
+        STATUS_CODES.BAD_REQUEST,
+        "Provide name or avatar to update"
+      );
+    }
+
+    if (
+      name !== undefined &&
+      (
+        typeof name !== "string" ||
+        name.trim().length < 2 ||
+        name.trim().length > 100
+      )
+    ) {
+      throw new ApiError(
+        STATUS_CODES.BAD_REQUEST,
+        "Name must contain 2 to 100 characters"
+      );
+    }
+
+    if (
+      avatar !== undefined &&
+      avatar !== null &&
+      (
+        typeof avatar !== "string" ||
+        avatar.length > 2048 ||
+        !/^https?:\/\//i.test(avatar)
+      )
+    ) {
+      throw new ApiError(
+        STATUS_CODES.BAD_REQUEST,
+        "Avatar must be a valid HTTP(S) URL or null"
+      );
+    }
+
+    const updates: {
+      name?: string;
+      avatar?: string | null;
+    } = {};
+
+    if (name !== undefined) {
+      updates.name = name.trim();
+    }
+
+    if (avatar !== undefined) {
+      updates.avatar = avatar;
+    }
+
+    const user =
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: updates,
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      ).select(safeUserFields);
+
+    if (!user) {
+      throw new ApiError(
+        STATUS_CODES.NOT_FOUND,
+        "User not found"
+      );
+    }
+
+    return res
+      .status(STATUS_CODES.OK)
+      .json({
+        success: true,
+        message:
+          "Profile updated successfully",
+        user,
+      });
   }
+);
 
-  return res.status(STATUS_CODES.OK).json({
-    success: true,
-    credits: user.credits,
-  });
-});
+// =====================================
+// Get User Remaining Credits
+// GET /api/v1/users/credits
+// =====================================
 
-/**
- * @desc    Update Cookie Consent Status in Database
- * @route   PUT /api/v1/users/cookie-consent
- * @access  Private
- */
-export const updateCookieConsent = asyncHandler(async (req: any, res: Response) => {
-  const { consent } = req.body; // 'accepted' or 'rejected'
+export const getUserCredits = asyncHandler(
+  async (
+    req: AuthenticatedRequest,
+    res: Response
+  ) => {
+    const userId = getUserId(req);
 
-  if (!['accepted', 'rejected'].includes(consent)) {
-    throw new ApiError(STATUS_CODES.BAD_REQUEST, 'Invalid consent value');
+    const user = await User.findById(
+      userId
+    )
+      .select("credits")
+      .lean();
+
+    if (!user) {
+      throw new ApiError(
+        STATUS_CODES.NOT_FOUND,
+        "User not found"
+      );
+    }
+
+    return res
+      .status(STATUS_CODES.OK)
+      .json({
+        success: true,
+        credits: user.credits,
+      });
   }
+);
 
-  const user = await User.findById(req.user.id);
-  if (!user) {
-    throw new ApiError(STATUS_CODES.NOT_FOUND, 'User not found');
-  }
+// =====================================
+// Update Cookie Consent
+// PUT /api/v1/users/cookie-consent
+// =====================================
 
-  user.consents.analyticsConsent = consent === 'accepted';
-  user.consents.marketingConsent = consent === 'accepted';
-  user.consents.termsAndPrivacyAccepted = consent === 'accepted';
-  user.consents.consentGivenAt = new Date();
-  user.consents.ipAddress = req.ip || req.headers['x-forwarded-for']?.toString();
+export const updateCookieConsent =
+  asyncHandler(
+    async (
+      req: AuthenticatedRequest,
+      res: Response
+    ) => {
+      const userId = getUserId(req);
 
-  await user.save();
+      const { consent } =
+        req.body ?? {};
 
-  return res.status(STATUS_CODES.OK).json({
-    success: true,
-    message: 'Cookie consent updated successfully',
-    consents: user.consents,
-  });
-});
+      if (
+        consent !== "accepted" &&
+        consent !== "rejected"
+      ) {
+        throw new ApiError(
+          STATUS_CODES.BAD_REQUEST,
+          "Consent must be accepted or rejected"
+        );
+      }
+
+      const accepted =
+        consent === "accepted";
+
+      const user =
+        await User.findByIdAndUpdate(
+          userId,
+          {
+            $set: {
+              "consents.essentialCookies": true,
+              "consents.analyticsConsent": accepted,
+              "consents.marketingConsent": accepted,
+              "consents.consentGivenAt": new Date(),
+              ...(req.ip
+                ? {
+                    "consents.ipAddress":
+                      req.ip,
+                  }
+                : {}),
+            },
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        ).select("consents");
+
+      if (!user) {
+        throw new ApiError(
+          STATUS_CODES.NOT_FOUND,
+          "User not found"
+        );
+      }
+
+      return res
+        .status(STATUS_CODES.OK)
+        .json({
+          success: true,
+          message:
+            "Cookie consent updated successfully",
+          consents: user.consents,
+        });
+    }
+  );

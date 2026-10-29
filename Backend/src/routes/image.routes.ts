@@ -1,43 +1,88 @@
-import { Router } from 'express';
-import { 
-  resizeImage, 
-  uploadAndResizeImage, 
-  getJobResultStatus 
-} from '../controllers/image.controller.js';
-import { optionalAuthenticate } from '../middlewares/optionalAuth.middleware.js';
-import { validate } from '../middlewares/validate.middleware.js';
-import { upload, verifyRealImage } from '../middlewares/multer.middleware.js';
-import { apiLimiter } from '../middlewares/rate-limit.middleware.js';
-import { resizeImageSchema } from '../validators/image.validator.js';
+
+import { Router } from "express";
+
+import {
+  resizeImage,
+  uploadAndResizeImage,
+  getJobResultStatus,
+} from "../controllers/image.controller.js";
+
+import {
+  optionalAuthenticate,
+} from "../middlewares/optionalAuth.middleware.js";
+
+import {
+  validate,
+} from "../middlewares/validate.middleware.js";
+
+import {
+  upload,
+  verifyRealImage,
+} from "../middlewares/multer.middleware.js";
+
+import {
+  apiLimiter,
+} from "../middlewares/rate-limit.middleware.js";
+
+import {
+  resizeImageSchema,
+} from "../validators/image.validator.js";
 
 const router = Router();
 
-// Sirf Rate Limiter global rakho
+const resizeImageValidationSchema = {
+  validate(input: unknown) {
+    const result = resizeImageSchema.safeParse(input);
+
+    if (result.success) {
+      return { value: result.data };
+    }
+
+    return {
+      error: {
+        details: result.error.issues.map(({ message }) => ({ message })),
+      },
+      value: input,
+    };
+  },
+} as unknown as Parameters<typeof validate>[0];
+
+// Rate limiting for all image routes.
 router.use(apiLimiter);
 
-// Resize route - Guest aur Logged-in dono ke liye (Optional Auth + Magic Number Security Check)
+// =====================================
+// Resize / Compress
+// =====================================
+
 router.post(
-  '/resize',
-  optionalAuthenticate, 
-  upload.single('image'),
-  verifyRealImage, // 🛡️ Malicious file detection check
-  validate(resizeImageSchema),
+  "/resize",
+  optionalAuthenticate,
+  upload.single("image"),
+  verifyRealImage,
+  validate(resizeImageValidationSchema),
   resizeImage
 );
 
-// Upload & resize route (+ Magic Number Security Check)
+// =====================================
+// Upload / Resize
+// =====================================
+
 router.post(
-  '/upload',
+  "/upload",
   optionalAuthenticate,
-  upload.single('image'),
-  verifyRealImage, // 🛡️ Malicious file detection check
-  validate(resizeImageSchema),
+  upload.single("image"),
+  verifyRealImage,
+  validate(resizeImageValidationSchema),
   uploadAndResizeImage
 );
 
-// Status check route
+// =====================================
+// Processing Status
+// =====================================
+
 router.get(
-  '/status/:jobId',
+  "/status/:jobId",
+  optionalAuthenticate,
   getJobResultStatus
 );
 

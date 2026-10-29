@@ -1,21 +1,25 @@
+
 import axios from "axios";
 
-// Environment variable se Backend URL uthayega (Fallback: localhost:5000)
-const API = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  withCredentials: true, // Cookies / Sessions ke liye
-});
+// Express backend URL
+// Development fallback: http://localhost:5000
+const BACKEND_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:5000"
+).replace(/\/$/, "");
 
-// Request interceptor (JWT Token automatic attach karne ke liye)
-API.interceptors.request.use((config) => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("meettools_token") : null;
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+// Central Axios instance
+const API = axios.create({
+  baseURL: BACKEND_URL,
+
+  // HttpOnly cookies automatically send hon gi
+  withCredentials: true,
+
+  timeout: 30000,
+
+  headers: {
+    Accept: "application/json",
+  },
 });
 
 export default API;

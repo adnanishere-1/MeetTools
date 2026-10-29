@@ -1,28 +1,70 @@
-import axios from 'axios';
 
-const API_URL = '/api/v1/jobs';
+import axios from "axios";
 
-// 1️⃣ Get User Jobs History via Real API
-export const fetchUserJobs = async (token?: string, page = 1, status?: string) => {
-  const response = await axios.get(API_URL, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    params: { page, status },
+// Next.js API rewrite forwards requests
+// to the Express backend.
+const API_URL = "/api/v1/jobs";
+
+// Axios instance with HttpOnly cookie support
+const jobsAPI = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+  timeout: 30000,
+  headers: {
+    Accept: "application/json",
+  },
+});
+
+// Optional job status filter
+export type JobStatus =
+  | "waiting"
+  | "active"
+  | "completed"
+  | "failed"
+  | "delayed"
+  | string;
+
+// 1. Get user jobs history from real backend
+export const fetchUserJobs = async (
+  page: number = 1,
+  status?: JobStatus
+) => {
+  const response = await jobsAPI.get("", {
+    params: {
+      page,
+      ...(status ? { status } : {}),
+    },
   });
+
   return response.data;
 };
 
-// 2️⃣ Get Single Job Details by ID via Real API
-export const fetchJobById = async (token?: string, jobId?: string) => {
-  const response = await axios.get(`${API_URL}/${jobId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+// 2. Get a single job by ID
+export const fetchJobById = async (
+  jobId: string
+) => {
+  if (!jobId || !jobId.trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  const response = await jobsAPI.get(
+    `/${encodeURIComponent(jobId)}`
+  );
+
   return response.data;
 };
 
-// 3️⃣ Delete Job by ID via Real API
-export const deleteJob = async (token?: string, jobId?: string) => {
-  const response = await axios.delete(`${API_URL}/${jobId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+// 3. Delete a job by ID
+export const deleteJob = async (
+  jobId: string
+) => {
+  if (!jobId || !jobId.trim()) {
+    throw new Error("Job ID is required.");
+  }
+
+  const response = await jobsAPI.delete(
+    `/${encodeURIComponent(jobId)}`
+  );
+
   return response.data;
 };
