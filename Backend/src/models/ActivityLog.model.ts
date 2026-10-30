@@ -11,12 +11,13 @@ import mongoose, {
 export type ActivityAction =
   | "USER_REGISTER"
   | "USER_LOGIN"
+  | "TOOL_USE"
   | "IMAGE_RESIZE"
   | "IMAGE_CLEAN"
   | "CREDIT_DEDUCT";
 
 export interface IActivityLog extends Document {
-  userId: mongoose.Types.ObjectId;
+  userId?: mongoose.Types.ObjectId | null;
   action: ActivityAction;
   details: Record<string, unknown>;
   ipAddress?: string;
@@ -30,10 +31,12 @@ export interface IActivityLog extends Document {
 const ActivityLogSchema =
   new Schema<IActivityLog>(
     {
+      // Optional for guest tool activity.
       userId: {
         type: Schema.Types.ObjectId,
         ref: "User",
-        required: true,
+        required: false,
+        default: null,
       },
 
       action: {
@@ -42,6 +45,7 @@ const ActivityLogSchema =
         enum: [
           "USER_REGISTER",
           "USER_LOGIN",
+          "TOOL_USE",
           "IMAGE_RESIZE",
           "IMAGE_CLEAN",
           "CREDIT_DEDUCT",
@@ -73,7 +77,6 @@ const ActivityLogSchema =
 // =====================================
 
 // Fast activity history for each user.
-// No duplicate inline index on userId.
 ActivityLogSchema.index(
   {
     userId: 1,

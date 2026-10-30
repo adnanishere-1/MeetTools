@@ -1,9 +1,14 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
+
 import Navbar from "@/components/layout/Navbar";
+
+// Directly import from AuthContext
+import { useAuth } from "@/context/AuthContext";
+
 import {
   EnvelopeSimpleIcon,
   LockSimpleIcon,
@@ -11,84 +16,63 @@ import {
   EyeSlashIcon,
   ArrowRightIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import axios from "axios";
-
-interface LoginUser {
-  id?: string;
-  _id?: string;
-  name: string;
-  email: string;
-  role: "admin" | "user";
-}
-
-interface LoginResponse {
-  success?: boolean;
-  user?: LoginUser;
-  data?: {
-    user?: LoginUser;
-  };
-  message?: string;
-}
 
 export default function LoginPage() {
+  const { loginUser, loading } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [errorMsg, setErrorMsg] =
+    useState("");
+
+  // =====================================
+  // Login Handler
+  // =====================================
 
   const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+    e: FormEvent<HTMLFormElement>
+  ): Promise<void> => {
     e.preventDefault();
 
     if (loading) return;
 
-    setLoading(true);
     setErrorMsg("");
 
+    const normalizedEmail =
+      email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      setErrorMsg(
+        "Please enter your email and password."
+      );
+      return;
+    }
+
     try {
-      const response = await axios.post<LoginResponse>(
-        "/api/v1/auth/login",
-        {
-          email: email.trim().toLowerCase(),
-          password,
-        },
-        {
-          withCredentials: true,
-        }
+      // AuthContext handles:
+      // - API request
+      // - HttpOnly cookie authentication
+      // - user state
+      // - dashboard redirect
+      const result = await loginUser(
+        normalizedEmail,
+        password
       );
 
-      const user =
-        response.data.user ||
-        response.data.data?.user;
-
-      if (!user) {
+      if (!result.success) {
         setErrorMsg(
-          "Login response does not contain user information."
-        );
-        setLoading(false);
-        return;
-      }
-
-      if (user.role === "admin") {
-        window.location.replace("/admin/dashboard");
-      } else {
-        window.location.replace("/dashboard");
-      }
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        setErrorMsg(
-          error.response?.data?.message ||
-            "Invalid email or password. Please try again."
-        );
-      } else {
-        setErrorMsg(
-          "Something went wrong. Please try again."
+          result.message ||
+            "Invalid email or password."
         );
       }
-
-      setLoading(false);
+    } catch {
+      setErrorMsg(
+        "Something went wrong. Please try again."
+      );
     }
   };
 
@@ -98,21 +82,30 @@ export default function LoginPage() {
 
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5">
+          {/* Heading */}
 
           <div className="text-center mb-8">
             <h1 className="text-3xl font-black text-[#121212] mb-2">
               Welcome Back
             </h1>
+
             <p className="text-sm text-[#555555]">
               Sign in to access your dashboard
             </p>
           </div>
 
+          {/* Error Message */}
+
           {errorMsg && (
-            <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs text-center font-medium">
+            <div
+              role="alert"
+              className="mb-6 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs text-center font-medium"
+            >
               {errorMsg}
             </div>
           )}
+
+          {/* Login / Signup Tabs */}
 
           <div className="flex bg-[#fff3ec] p-1.5 rounded-2xl mb-8 border border-[#fb8500]/10">
             <Link
@@ -130,10 +123,14 @@ export default function LoginPage() {
             </Link>
           </div>
 
+          {/* Login Form */}
+
           <form
             onSubmit={handleSubmit}
             className="space-y-5"
           >
+            {/* Email Field */}
+
             <div>
               <label
                 htmlFor="login-email"
@@ -158,10 +155,13 @@ export default function LoginPage() {
                   }
                   placeholder="name@example.com"
                   autoComplete="email"
+                  disabled={loading}
                   className="w-full pl-12 pr-4 py-3.5 bg-[#fff3ec]/50 border border-[#fb8500]/20 rounded-2xl text-sm focus:outline-none focus:border-[#fb8500] focus:bg-white transition-all text-[#121212] placeholder-[#888888]"
                 />
               </div>
             </div>
+
+            {/* Password Field */}
 
             <div>
               <div className="flex justify-between items-center mb-2">
@@ -200,19 +200,23 @@ export default function LoginPage() {
                   }
                   placeholder="••••••••"
                   autoComplete="current-password"
+                  disabled={loading}
                   className="w-full pl-12 pr-12 py-3.5 bg-[#fff3ec]/50 border border-[#fb8500]/20 rounded-2xl text-sm focus:outline-none focus:border-[#fb8500] focus:bg-white transition-all text-[#121212] placeholder-[#888888]"
                 />
 
                 <button
                   type="button"
                   onClick={() =>
-                    setShowPassword(!showPassword)
+                    setShowPassword(
+                      (previous) => !previous
+                    )
                   }
                   aria-label={
                     showPassword
                       ? "Hide password"
                       : "Show password"
                   }
+                  aria-pressed={showPassword}
                   className="absolute right-4 text-[#888888] hover:text-[#fb8500] transition-colors cursor-pointer"
                 >
                   {showPassword ? (
@@ -224,10 +228,12 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Submit Button */}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-2 cursor-pointer"
+              className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-2 cursor-pointer"
             >
               {loading
                 ? "Signing In..."
@@ -242,8 +248,10 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Signup Link */}
+
           <p className="text-center text-xs text-[#777777] mt-8">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href="/signup"
               className="font-bold text-[#fb8500] hover:underline"
@@ -251,7 +259,6 @@ export default function LoginPage() {
               Create One
             </Link>
           </p>
-
         </div>
       </main>
     </div>

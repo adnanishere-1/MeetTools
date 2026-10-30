@@ -3,75 +3,37 @@ import type {
   Request,
   Response,
   NextFunction,
+  RequestHandler,
 } from "express";
 
 import { z } from "zod";
-
 import { ApiError } from "../utils/ApiError.js";
 import { STATUS_CODES } from "../utils/statusCodes.js";
 
-// =====================================
-// Types
-// =====================================
-
-type ValidationSource =
-  | "body"
-  | "query"
-  | "params";
+type ValidationSource = "body" | "query" | "params";
 
 type ValidationOptions = {
   source?: ValidationSource;
+  wrapped?: boolean;
 };
 
-type JoiValidationResult = {
-  error?: {
-    details: Array<{
-      message: string;
-    }>;
-  };
-  value: unknown;
-};
-
-type JoiValidationSchema = {
+type JoiSchema = {
   validate: (
-    input: unknown,
+    value: unknown,
     options: {
       abortEarly: boolean;
       convert: boolean;
       allowUnknown: boolean;
     }
-  ) => JoiValidationResult;
+  ) => {
+    error?: {
+      details: Array<{ message: string }>;
+    };
+    value: unknown;
+  };
 };
 
-type SupportedSchema =
-  | JoiValidationSchema
-  | z.ZodType;
-
-// =====================================
-// Type Guards
-// =====================================
-
-function isJoiSchema(
-  schema: SupportedSchema
-): schema is JoiValidationSchema {
-  return (
-    "validate" in schema &&
-    typeof schema.validate === "function"
-  );
-}
-
-function isZodSchema(
-  schema: SupportedSchema
-): schema is z.ZodType {
-  return (
-    "safeParse" in schema &&
-    typeof schema.safeParse === "function"
-  );
-}
-
-// =====================================
-// Helpers
-// =====================================
+type SupportedSchema = z.ZodType | JoiSchema;
 
 function saveValidatedData(
   req: Request,
@@ -85,8 +47,7 @@ function saveValidatedData(
   }
 
   if (source === "query") {
-    // Express 5 req.query may be
-    // getter-only.
+    // Express 5: req.query can be read-only.
     res.locals.validatedQuery = value;
     return;
   }
@@ -94,204 +55,195 @@ function saveValidatedData(
   res.locals.validatedParams = value;
 }
 
-function getValidationInput(
-  req: Request,
-  source: ValidationSource
-): unknown {
-  return req[source];
+function validationError(
+  next: NextFunction,
+  messages: string[]
+): void {
+  next(
+    new ApiError(
+      STATUS_CODES.BAD_REQUEST,
+      `Validation Error: ${messages.join("; ")}`
+    )
+  );
 }
 
-// =====================================
-// Validation Middleware
-// =====================================
-
-/**
- * Supports both Joi and Zod schemas.
- *
- * Joi:
- * validate(joiSchema)
- * validate(joiQuerySchema, {
- *   source: "query"
- * })
- *
- * Zod (direct):
- * validate(z.object({...}))
- *
- * Zod (request wrapper):
- * validate(z.object({
- *   body: z.object({...})
- * }))
- */
-export const validate = (
+export function validate(
   schema: SupportedSchema,
   options: ValidationOptions = {}
-) => {
+): RequestHandler {
+  const source = options.source ?? "body";
+  const wrapped = options.wrapped ?? true;
+
   return (
     req: Request,
     res: Response,
     next: NextFunction
   ): void => {
-    const source =
-      options.source ?? "body";
-
-    // =================================
-    // Joi Validation
-    // =================================
-
-    if (isJoiSchema(schema)) {
-      const input =
-        getValidationInput(req, source);
-
-      const { error, value } =
-        schema.validate(input, {
-          abortEarly: false,
-          convert: true,
-          allowUnknown: false,
-        });
-
-      if (error) {
-        const messages =
-          error.details.map(
-            (detail) => detail.message
-          );
-
+    try {
+      // Never continue with an absent JSON body.
+      if (
+        source === "body" &&
+        (req.body === undefined || req.body === null)
+      ) {
         next(
           new ApiError(
             STATUS_CODES.BAD_REQUEST,
-            `Validation Error: ${messages.join("; ")}`
+            "Request body is missing. Send a JSON object with Content-Type: application/json."
           )
         );
-
         return;
       }
 
-      saveValidatedData(
-        req,
-        res,
-        source,
-        value
-      );
+      // ZOD FIRST: avoids accidental Joi detection.
+      if (
+        schema !== null &&
+        typeof schema === "object" &&
+        "safeParse" in schema &&
+        typeof schema.safeParse === "function"
+      ) {
+        const zodSchema = schema as z.ZodType;
 
-      next();
-      return;
-    }
+        const input = wrapped
+          ? {
+              body: req.body,
+              query: req.query,
+              params: req.params,
+            }
+          : req[source];
 
-    // =================================
-    // Zod Validation
-    // =================================
+        const result = zodSchema.safeParse(input);
 
-    if (isZodSchema(schema)) {
-      // Zod schemas in this project may
-      // use a request wrapper:
-      // { body: ..., query: ..., params: ... }
-      //
-      // We validate the complete request
-      // shape so updateProfileSchema works.
-
-      const requestData = {
-        body: req.body,
-        query: req.query,
-        params: req.params,
-      };
-
-      const result =
-        schema.safeParse(requestData);
-
-      if (!result.success) {
-        const messages =
-          result.error.issues.map(
-            (issue) => {
-              const path =
-                issue.path.join(".");
-
+        if (!result.success) {
+          validationError(
+            next,
+            result.error.issues.map((issue) => {
+              const path = issue.path.join(".");
               return path
                 ? `${path}: ${issue.message}`
                 : issue.message;
-            }
+            })
           );
+          return;
+        }
 
-        next(
-          new ApiError(
-            STATUS_CODES.BAD_REQUEST,
-            `Validation Error: ${messages.join("; ")}`
-          )
-        );
+        if (wrapped) {
+          const data = result.data;
 
-        return;
-      }
+          if (
+            data === null ||
+            typeof data !== "object" ||
+            Array.isArray(data)
+          ) {
+            next(
+              new ApiError(
+                STATUS_CODES.INTERNAL_SERVER_ERROR,
+                "Invalid wrapped validation schema"
+              )
+            );
+            return;
+          }
 
-      const parsed =
-        result.data;
-
-      if (
-        parsed !== null &&
-        typeof parsed === "object" &&
-        !Array.isArray(parsed) &&
-        (
-          "body" in parsed ||
-          "query" in parsed ||
-          "params" in parsed
-        )
-      ) {
-        const validated =
-          parsed as {
+          const validated = data as {
             body?: unknown;
             query?: unknown;
             params?: unknown;
           };
 
-        if (
-          validated.body !== undefined
-        ) {
+          if (
+            Object.prototype.hasOwnProperty.call(
+              validated,
+              "body"
+            )
+          ) {
+            saveValidatedData(
+              req,
+              res,
+              "body",
+              validated.body
+            );
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(
+              validated,
+              "query"
+            )
+          ) {
+            saveValidatedData(
+              req,
+              res,
+              "query",
+              validated.query
+            );
+          }
+
+          if (
+            Object.prototype.hasOwnProperty.call(
+              validated,
+              "params"
+            )
+          ) {
+            saveValidatedData(
+              req,
+              res,
+              "params",
+              validated.params
+            );
+          }
+        } else {
           saveValidatedData(
             req,
             res,
-            "body",
-            validated.body
+            source,
+            result.data
           );
         }
 
-        if (
-          validated.query !== undefined
-        ) {
-          saveValidatedData(
-            req,
-            res,
-            "query",
-            validated.query
-          );
-        }
-
-        if (
-          validated.params !== undefined
-        ) {
-          saveValidatedData(
-            req,
-            res,
-            "params",
-            validated.params
-          );
-        }
-      } else {
-        // Direct Zod schema:
-        // validate(z.object({...}))
-        saveValidatedData(
-          req,
-          res,
-          source,
-          parsed
-        );
+        next();
+        return;
       }
 
-      next();
-      return;
-    }
+      // Legacy Joi support
+      if (
+        schema !== null &&
+        typeof schema === "object" &&
+        "validate" in schema &&
+        typeof schema.validate === "function"
+      ) {
+        const joiSchema = schema as JoiSchema;
 
-    next(
-      new ApiError(
-        STATUS_CODES.INTERNAL_SERVER_ERROR,
-        "Unsupported validation schema"
-      )
-    );
+        const { error, value } = joiSchema.validate(
+          req[source],
+          {
+            abortEarly: false,
+            convert: true,
+            allowUnknown: false,
+          }
+        );
+
+        if (error) {
+          validationError(
+            next,
+            error.details.map(
+              (detail) => detail.message
+            )
+          );
+          return;
+        }
+
+        saveValidatedData(req, res, source, value);
+        next();
+        return;
+      }
+
+      next(
+        new ApiError(
+          STATUS_CODES.INTERNAL_SERVER_ERROR,
+          "Unsupported validation schema"
+        )
+      );
+    } catch (error) {
+      next(error);
+    }
   };
-};
+}

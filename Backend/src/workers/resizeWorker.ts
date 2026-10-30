@@ -1,6 +1,9 @@
 
 import "dotenv/config";
 
+import mongoose from "mongoose";
+import { createHash } from "node:crypto";
+
 import {
   Worker,
   type Job,
@@ -8,6 +11,7 @@ import {
 
 import { imagekit } from "../config/imagekit.js";
 import { logger } from "../utils/logger.js";
+import { ActivityLog } from "../models/ActivityLog.model.js";
 
 // =====================================
 // Types
@@ -77,6 +81,51 @@ const redisConnection = {
 };
 
 // =====================================
+// MongoDB Connection For Activity Logs
+// =====================================
+
+// Reuse an existing MongoDB connection if
+// the worker runs inside the API process.
+
+let mongoConnectionPromise:
+  Promise<typeof mongoose> | null = null;
+
+async function ensureMongoConnection():
+  Promise<void> {
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  if (mongoose.connection.readyState === 2) {
+    await mongoose.connection.asPromise();
+    return;
+  }
+
+  if (!mongoConnectionPromise) {
+    const mongoUri =
+      process.env.MONGODB_URI ||
+      process.env.MONGO_URI;
+
+    if (!mongoUri) {
+      throw new Error(
+        "MONGODB_URI or MONGO_URI is required for worker activity logging."
+      );
+    }
+
+    mongoConnectionPromise = mongoose.connect(
+      mongoUri
+    );
+  }
+
+  try {
+    await mongoConnectionPromise;
+  } catch (error) {
+    mongoConnectionPromise = null;
+    throw error;
+  }
+}
+
+// =====================================
 // Validation Helpers
 // =====================================
 
@@ -136,6 +185,99 @@ function validateSourceUrl(
   ) {
     throw new Error(
       "Source image URL must use HTTP or HTTPS."
+    );
+  }
+}
+
+// =====================================
+// Save Successful Tool Usage
+// =====================================
+
+async function recordToolUsage(
+  job: Job<ResizeJobData, ResizeJobResult>,
+  details: {
+    width: number | null;
+    height: number | null;
+    format: string;
+  }
+): Promise<void> {
+  try {
+    await ensureMongoConnection();
+
+    const identifier = job.data.userId;
+
+    // Controller sends either:
+    // user:<MongoDB ObjectId>
+    // guest:<IP address>
+
+    const authenticatedUserId =
+      typeof identifier === "string" &&
+      identifier.startsWith("user:")
+        ? identifier.slice(5)
+        : null;
+
+    const userId =
+      authenticatedUserId &&
+      mongoose.isValidObjectId(
+        authenticatedUserId
+      )
+        ? new mongoose.Types.ObjectId(
+            authenticatedUserId
+          )
+        : null;
+
+    // A deterministic activity ID prevents
+    // duplicate counts when BullMQ retries
+    // the same job.
+    const activityId = new mongoose.Types.ObjectId(
+      createHash("sha256")
+        .update(
+          `meettools:image-resize:${job.queueName}:${job.id}`
+        )
+        .digest()
+        .subarray(0, 12)
+    );
+
+    const result = await ActivityLog.updateOne(
+      {
+        _id: activityId,
+      },
+      {
+        $setOnInsert: {
+          userId,
+          action: "IMAGE_RESIZE",
+          details: {
+            toolId: "Image Resize",
+            jobId: String(job.id),
+            queueName: job.name,
+            format: details.format,
+            width: details.width,
+            height: details.height,
+            visitorType: userId
+              ? "user"
+              : "guest",
+          },
+        },
+      },
+      {
+        upsert: true,
+      }
+    );
+
+    if (result.upsertedCount > 0) {
+      logger.info(
+        `📊 Tool usage recorded: Image Resize (${userId ? "Logged-in" : "Guest"})`
+      );
+    }
+  } catch (error: unknown) {
+    // Analytics errors must not break
+    // successful image processing.
+    logger.error(
+      {
+        err: error,
+        jobId: job.id,
+      },
+      "❌ Failed to record tool usage"
     );
   }
 }
@@ -272,6 +414,14 @@ const processResizeJob = async (
       width,
       height,
     };
+
+    // Record this tool execution for
+    // Admin Dashboard analytics.
+    await recordToolUsage(job, {
+      width,
+      height,
+      format,
+    });
 
     await job.updateProgress(100);
 

@@ -1,13 +1,15 @@
 
 import type { Metadata } from "next";
 import "./globals.css";
+
 import Footer from "@/components/layout/Footer";
+import { AuthProvider } from "@/context/AuthContext";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "MeetTools - Next-Gen Image Processing",
   description:
     "Batch image scaling, presets, and cloud media utilities",
-
   icons: {
     icon: [
       {
@@ -33,11 +35,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen flex flex-col justify-between bg-[#fff3ec] text-[#121212] font-sans">
-        <div className="flex-1">
-          {children}
-        </div>
+        <AuthProvider>
+          <div className="flex-1">{children}</div>
+          <Footer />
+        </AuthProvider>
 
-        <Footer />
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          duration={4000}
+          visibleToasts={3}
+        />
       </body>
     </html>
   );

@@ -1,16 +1,18 @@
 
-import { Response } from 'express';
-import { User } from '../models/User.model.js';
-import { ActivityLog } from '../models/ActivityLog.model.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { STATUS_CODES } from '../utils/statusCodes.js';
+import { Response } from "express";
+import { User } from "../models/User.model.js";
+import { ActivityLog } from "../models/ActivityLog.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { STATUS_CODES } from "../utils/statusCodes.js";
 
 export const getDashboardStats = asyncHandler(
   async (req: any, res: Response) => {
     const totalUsers = await User.countDocuments();
+
     const totalAdmins = await User.countDocuments({
-      role: 'admin',
+      role: "admin",
     });
+
     const verifiedUsers = await User.countDocuments({
       isEmailVerified: true,
     });
@@ -31,24 +33,56 @@ export const getDashboardStats = asyncHandler(
       createdAt: { $gte: oneMonthAgo },
     });
 
+    // Count the actual tool actions stored by
+    // ActivityLog.model.ts.
+    const toolActions = [
+      "TOOL_USE",
+      "IMAGE_RESIZE",
+      "IMAGE_CLEAN",
+    ];
+
     const actionStats = await ActivityLog.aggregate([
       {
         $match: {
-          action: 'TOOL_USE',
-          'details.toolId': {
-            $exists: true,
-            $ne: null,
+          action: { $in: toolActions },
+        },
+      },
+      {
+        $addFields: {
+          resolvedToolId: {
+            $ifNull: [
+              "$details.toolId",
+              {
+                $switch: {
+                  branches: [
+                    {
+                      case: {
+                        $eq: ["$action", "IMAGE_RESIZE"],
+                      },
+                      then: "Image Resize",
+                    },
+                    {
+                      case: {
+                        $eq: ["$action", "IMAGE_CLEAN"],
+                      },
+                      then: "Image Clean",
+                    },
+                  ],
+                  default: "Other Tool",
+                },
+              },
+            ],
           },
         },
       },
       {
         $group: {
-          _id: '$details.toolId',
+          _id: "$resolvedToolId",
           count: { $sum: 1 },
           guestCount: {
             $sum: {
               $cond: [
-                { $eq: ['$userId', null] },
+                { $eq: [{ $ifNull: ["$userId", null] }, null] },
                 1,
                 0,
               ],
@@ -57,7 +91,7 @@ export const getDashboardStats = asyncHandler(
           userCount: {
             $sum: {
               $cond: [
-                { $ne: ['$userId', null] },
+                { $ne: [{ $ifNull: ["$userId", null] }, null] },
                 1,
                 0,
               ],
@@ -68,10 +102,10 @@ export const getDashboardStats = asyncHandler(
       { $sort: { count: -1 } },
     ]);
 
-    const recentLogs = await ActivityLog.find({
-      action: 'TOOL_USE' as any,
-    })
-      .populate('userId', 'name email role')
+    // Show all activity types in Recent Activity,
+    // including registration and login.
+    const recentLogs = await ActivityLog.find()
+      .populate("userId", "name email role")
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
@@ -96,8 +130,20 @@ export const getDashboardStats = asyncHandler(
         _id: log._id,
         userId: log.userId,
         action: log.action,
-        toolId: log.details?.toolId || 'Unknown',
-        visitorType: log.userId ? 'user' : 'guest',
+        toolId:
+          log.details?.toolId ||
+          (log.action === "IMAGE_RESIZE"
+            ? "Image Resize"
+            : log.action === "IMAGE_CLEAN"
+              ? "Image Clean"
+              : log.action === "USER_REGISTER"
+                ? "Registration"
+                : log.action === "USER_LOGIN"
+                  ? "Login"
+                  : log.action === "CREDIT_DEDUCT"
+                    ? "Credits"
+                    : "Unknown"),
+        visitorType: log.userId ? "user" : "guest",
         createdAt: log.createdAt,
       })
     );

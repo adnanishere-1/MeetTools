@@ -220,7 +220,7 @@ export default function DashboardPage() {
 
   // Reuse a saved asset in the resize workspace.
   const handleReuseJob = (jobId: string) => {
-    router.push(`/tools/resize/${jobId}`);
+    router.push(`/tools/resize?jobId=${encodeURIComponent(jobId)}`);
   };
 
   // Download an output file.
@@ -518,8 +518,7 @@ export default function DashboardPage() {
 
                         <div className="flex items-center gap-1 shrink-0">
                           {/* Reuse Job */}
-                          {job.status === "completed" && (
-                            <button
+                          <button
                               type="button"
                               onClick={() =>
                                 handleReuseJob(job._id)
@@ -533,7 +532,6 @@ export default function DashboardPage() {
                                 weight="bold"
                               />
                             </button>
-                          )}
 
                           {/* Download Output */}
                           {job.status === "completed" &&

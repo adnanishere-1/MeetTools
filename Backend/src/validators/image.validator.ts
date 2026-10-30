@@ -1,33 +1,20 @@
 
 import { z } from "zod";
 
-// =====================================
-// Configuration
-// =====================================
-
 const MAX_DIMENSION = 10000;
 const MAX_TARGET_SIZE_MB = 100;
-
 const DEFAULT_QUALITY = 90;
 
 // =====================================
 // Helpers
 // =====================================
 
-const optionalDimension = (
-  field: string
-) =>
+const optionalDimension = (field: string) =>
   z
-    .union([
-      z.string(),
-      z.number(),
-    ])
+    .union([z.string(), z.number()])
     .optional()
     .transform((value) => {
-      if (
-        value === undefined ||
-        value === ""
-      ) {
+      if (value === undefined || value === "") {
         return undefined;
       }
 
@@ -36,13 +23,8 @@ const optionalDimension = (
     .pipe(
       z
         .number()
-        .int(
-          `${field} must be an integer`
-        )
-        .min(
-          1,
-          `${field} must be at least 1`
-        )
+        .int(`${field} must be an integer`)
+        .min(1, `${field} must be at least 1`)
         .max(
           MAX_DIMENSION,
           `${field} cannot exceed ${MAX_DIMENSION}`
@@ -55,16 +37,10 @@ const optionalTargetSize = (
   maximum: number
 ) =>
   z
-    .union([
-      z.string(),
-      z.number(),
-    ])
+    .union([z.string(), z.number()])
     .optional()
     .transform((value) => {
-      if (
-        value === undefined ||
-        value === ""
-      ) {
+      if (value === undefined || value === "") {
         return undefined;
       }
 
@@ -74,9 +50,7 @@ const optionalTargetSize = (
       z
         .number()
         .finite()
-        .positive(
-          `${field} must be greater than 0`
-        )
+        .positive(`${field} must be greater than 0`)
         .max(
           maximum,
           `${field} exceeds the maximum allowed size`
@@ -85,16 +59,10 @@ const optionalTargetSize = (
     );
 
 const qualitySchema = z
-  .union([
-    z.string(),
-    z.number(),
-  ])
+  .union([z.string(), z.number()])
   .optional()
   .transform((value) => {
-    if (
-      value === undefined ||
-      value === ""
-    ) {
+    if (value === undefined || value === "") {
       return DEFAULT_QUALITY;
     }
 
@@ -103,28 +71,15 @@ const qualitySchema = z
   .pipe(
     z
       .number()
-      .int(
-        "Quality must be an integer"
-      )
-      .min(
-        10,
-        "Quality minimum is 10"
-      )
-      .max(
-        100,
-        "Quality maximum is 100"
-      )
+      .int("Quality must be an integer")
+      .min(10, "Quality minimum is 10")
+      .max(100, "Quality maximum is 100")
   );
 
 const preserveResolutionSchema = z
   .union([
     z.boolean(),
-    z.enum([
-      "true",
-      "false",
-      "1",
-      "0",
-    ]),
+    z.enum(["true", "false", "1", "0"]),
   ])
   .optional()
   .transform((value) => {
@@ -144,53 +99,47 @@ const preserveResolutionSchema = z
 // =====================================
 
 export const resizeImageSchema = z.object({
-  body: z
-    .object({
-      width:
-        optionalDimension("Width"),
+  body: z.preprocess(
+    (value) =>
+      value === undefined ? {} : value,
+    z
+      .object({
+        width: optionalDimension("Width"),
 
-      height:
-        optionalDimension("Height"),
+        height: optionalDimension("Height"),
 
-      targetFileSizeKB:
-        optionalTargetSize(
+        targetFileSizeKB: optionalTargetSize(
           "Target file size in KB",
           MAX_TARGET_SIZE_MB * 1024
         ),
 
-      targetFileSizeMB:
-        optionalTargetSize(
+        targetFileSizeMB: optionalTargetSize(
           "Target file size in MB",
           MAX_TARGET_SIZE_MB
         ),
 
-      quality:
-        qualitySchema,
+        quality: qualitySchema,
 
-      format: z
-        .enum([
-          "jpeg",
-          "png",
-          "webp",
-          "avif",
-        ])
-        .default("webp"),
+        format: z
+          .enum(["jpeg", "png", "webp", "avif"])
+          .default("webp"),
 
-      preserveResolution:
-        preserveResolutionSchema,
-    })
-    .strict()
-    .superRefine((data, ctx) => {
-      if (
-        data.targetFileSizeKB !== undefined &&
-        data.targetFileSizeMB !== undefined
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["targetFileSizeMB"],
-          message:
-            "Provide either targetFileSizeKB or targetFileSizeMB, not both",
-        });
-      }
-    }),
+        preserveResolution:
+          preserveResolutionSchema,
+      })
+      .strict()
+      .superRefine((data, ctx) => {
+        if (
+          data.targetFileSizeKB !== undefined &&
+          data.targetFileSizeMB !== undefined
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["targetFileSizeMB"],
+            message:
+              "Provide either targetFileSizeKB or targetFileSizeMB, not both",
+          });
+        }
+      })
+  ),
 });

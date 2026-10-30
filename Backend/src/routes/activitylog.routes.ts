@@ -43,7 +43,7 @@ router.use(authenticate);
 router.get(
   "/",
   validate({
-    validate(input) {
+    validate(input:unknown) {
       const result = getActivityLogsQuerySchema.safeParse(input);
 
       if (!result.success) {

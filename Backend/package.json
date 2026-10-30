@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "rimraf dist && tsc",
-    "start": "node dist/server.js",
-    "worker": "tsx watch src/worker.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+ 
+"scripts": {
+  "dev": "tsx watch src/server.ts",
+  "build": "rimraf dist && tsc",
+  "start": "node dist/server.js",
+  "worker": "tsx watch src/worker.ts",
+  "worker:start": "node dist/worker.js",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
+
   "keywords": [],
   "author": "",
   "license": "ISC",

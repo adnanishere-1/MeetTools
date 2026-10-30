@@ -1,67 +1,83 @@
-
-import 'dotenv';  
+import { config } from "dotenv";
+import "dotenv";
 config();
 
-import app from './app.js';
-import { connectDB } from './config/db.js';
-import { logger } from './utils/logger.js';
-import { redis } from './config/redis.js';
+import app from "./app.js";
+import { connectDB } from "./config/db.js";
+import { redis } from "./config/redis.js";
+import { logger } from "./utils/logger.js";
 
 // BullMQ image processing worker
-import './workers/resizeWorker.js';
-import { config } from 'zod/v4/mini';
+import "./workers/resizeWorker.js";
 
-const PORT = process.env.PORT || 5000;
 
-async function startServer() {
+
+const PORT = Number(process.env.PORT) || 5000;
+
+let isShuttingDown = false;
+
+async function startServer(): Promise<void> {
   try {
-    // Connect MongoDB
     await connectDB();
 
-    // Start Express server
     const server = app.listen(PORT, () => {
       logger.info(
         `Server is running on port ${PORT} in ${
-          process.env.NODE_ENV || 'development'
+          process.env.NODE_ENV || "development"
         } mode`
       );
     });
 
-    // Graceful shutdown
-    const handleShutdown = (signal: string) => {
+    const handleShutdown = (signal: string): void => {
+      if (isShuttingDown) {
+        return;
+      }
+
+      isShuttingDown = true;
+
       logger.info(
-        `${signal} signal received: closing HTTP server gracefully...`
+        `${signal} received. Shutting down gracefully...`
       );
 
-      server.close(async () => {
-        logger.info('HTTP server closed.');
+      server.close(async (error) => {
+        if (error) {
+          logger.error(
+            { err: error },
+            "Error closing HTTP server"
+          );
+        } else {
+          logger.info("HTTP server closed");
+        }
 
-        await redis.quit();
+        try {
+          await redis.quit();
+          logger.info("Redis connection closed");
+        } catch (redisError) {
+          logger.error(
+            { err: redisError },
+            "Failed to close Redis"
+          );
+        }
 
-        logger.info('Redis connection closed.');
-
-        process.exit(0);
+        process.exit(error ? 1 : 0);
       });
     };
 
-    process.on('SIGTERM', () =>
-      handleShutdown('SIGTERM')
-    );
+    process.on("SIGTERM", () => {
+      handleShutdown("SIGTERM");
+    });
 
-    process.on('SIGINT', () =>
-      handleShutdown('SIGINT')
-    );
+    process.on("SIGINT", () => {
+      handleShutdown("SIGINT");
+    });
   } catch (error) {
     logger.error(
-      `Failed to start the server: ${
-        error instanceof Error
-          ? error.message
-          : String(error)
-      }`
+      { err: error },
+      "Failed to start server"
     );
 
     process.exit(1);
   }
 }
 
-startServer();
+void startServer();

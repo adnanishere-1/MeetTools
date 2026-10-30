@@ -7,36 +7,144 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from "react";
 
 import axios from "axios";
 import API from "@/lib/api";
 
-// User data from Express backend
-interface AuthUser {
+export type UserRole = "user" | "admin";
+
+export interface AuthUser {
   id?: string;
   _id?: string;
-  name?: string;
-  email?: string;
-  role: "user" | "admin";
+  name: string;
+  email: string;
+  role: UserRole;
   avatar?: string;
   credits?: number;
 }
 
-// Context interface
+export interface UserConsents {
+  termsAndPrivacyAccepted: boolean;
+  analyticsConsent: boolean;
+  marketingConsent: boolean;
+}
+
+export interface AuthResult {
+  success: boolean;
+  message?: string;
+  data?: unknown;
+}
+
+interface AuthApiResponse {
+  success?: boolean;
+  message?: string;
+  user?: AuthUser;
+  data?: {
+    user?: AuthUser;
+  };
+}
+
 interface AuthContextType {
   user: AuthUser | null;
+  isAuthenticated: boolean;
   loading: boolean;
-  logout: () => Promise<void>;
+  error: string | null;
+
+  loginUser: (
+    email: string,
+    password: string
+  ) => Promise<AuthResult>;
+
+  signupUser: (
+    fullName: string,
+    email: string,
+    password: string,
+    consents: UserConsents
+  ) => Promise<AuthResult>;
+
+  verifyOtp: (
+    email: string,
+    otp: string
+  ) => Promise<AuthResult>;
+
+  resendOtp: (
+    email: string
+  ) => Promise<AuthResult>;
+
+  logoutUser: () => Promise<void>;
+
+  checkAuth: () => Promise<AuthUser | null>;
+
+  // Compatibility with existing components
   refreshUser: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<
   AuthContextType | undefined
 >(undefined);
 
-// Auth Provider
+function getErrorMessage(
+  error: unknown,
+  fallback: string
+): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as
+      | {
+          message?: string;
+          error?: {
+            message?: string;
+          };
+        }
+      | undefined;
+
+    return (
+      data?.error?.message ||
+      data?.message ||
+      (error.response?.status === 401
+        ? "Invalid email or password."
+        : undefined) ||
+      fallback
+    );
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
+function extractUser(
+  response: AuthApiResponse
+): AuthUser | null {
+  const candidate =
+    response.user ??
+    response.data?.user;
+
+  if (
+    !candidate ||
+    typeof candidate !== "object" ||
+    (candidate.role !== "user" &&
+      candidate.role !== "admin")
+  ) {
+    return null;
+  }
+
+  return candidate;
+}
+
+function getDashboardPath(
+  role: UserRole
+): string {
+  return role === "admin"
+    ? "/admin/dashboard"
+    : "/dashboard";
+}
+
 export function AuthProvider({
   children,
 }: {
@@ -45,89 +153,377 @@ export function AuthProvider({
   const [user, setUser] =
     useState<AuthUser | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  // Verify session with backend using HttpOnly cookie
-  const refreshUser = useCallback(async () => {
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const initialCheckStarted =
+    useRef(false);
+
+  const isAuthenticated =
+    user !== null;
+
+  // ==================================
+  // Restore session
+  // ==================================
+
+  const checkAuth =
+    useCallback(async (): Promise<
+      AuthUser | null
+    > => {
+      setLoading(true);
+
+      try {
+        const response =
+          await API.get<AuthApiResponse>(
+            "/api/v1/users/me"
+          );
+
+        const currentUser =
+          extractUser(response.data);
+
+        setUser(currentUser);
+
+        return currentUser;
+      } catch (err: unknown) {
+        setUser(null);
+
+        if (
+          !axios.isAxiosError(err) ||
+          err.response?.status !== 401
+        ) {
+          console.error(
+            "Session verification failed:",
+            getErrorMessage(
+              err,
+              "Unable to verify session"
+            )
+          );
+        }
+
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+
+  useEffect(() => {
+    if (initialCheckStarted.current) return;
+    initialCheckStarted.current = true;
+
+    // Public auth pages do not need a protected /users/me request.
+    const path = window.location.pathname;
+    if (path === "/login" || path === "/signup" || path === "/verify-otp") {
+      setLoading(false);
+      return;
+    }
+
+    void checkAuth();
+  }, [checkAuth]);
+
+  // ==================================
+  // Login
+  // ==================================
+
+  const loginUser = async (
+    email: string,
+    password: string
+  ): Promise<AuthResult> => {
     setLoading(true);
+    setError(null);
 
     try {
-      const response = await API.get(
-        "/api/v1/users/me",
-        {
-          withCredentials: true,
-        }
-      );
+      const response =
+        await API.post<AuthApiResponse>(
+          "/api/v1/auth/login",
+          {
+            email:
+              email.trim().toLowerCase(),
+            password,
+          }
+        );
 
-      const userData =
-        response.data?.user || response.data;
-
-      if (
-        !userData ||
-        (userData.role !== "user" &&
-          userData.role !== "admin")
-      ) {
-        setUser(null);
-        return;
-      }
-
-      setUser(userData);
-    } catch (error: unknown) {
-      setUser(null);
-
-      // A 401 is normal for a visitor who is not logged in
-      if (
-        !axios.isAxiosError(error) ||
-        error.response?.status !== 401
-      ) {
-        console.error(
-          "Failed to verify user session:",
-          error
+      if (response.data.success === false) {
+        throw new Error(
+          response.data.message ||
+            "Login failed."
         );
       }
+
+      const loggedInUser =
+        extractUser(response.data);
+
+      if (!loggedInUser) {
+        throw new Error(
+          "Login response did not include valid user data."
+        );
+      }
+
+      setUser(loggedInUser);
+
+      window.location.replace(
+        getDashboardPath(
+          loggedInUser.role
+        )
+      );
+
+      return {
+        success: true,
+        message:
+          response.data.message,
+      };
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        "Login failed. Please try again."
+      );
+
+      setError(message);
+      setUser(null);
+
+      return {
+        success: false,
+        message,
+      };
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  // Restore user session from backend on page load
-  useEffect(() => {
-    void refreshUser();
-  }, [refreshUser]);
+  // ==================================
+  // Signup
+  // ==================================
 
-  // Logout and clear HttpOnly cookie through backend
-  const logout = useCallback(async (): Promise<void> => {
+  const signupUser = async (
+    fullName: string,
+    email: string,
+    password: string,
+    consents: UserConsents
+  ): Promise<AuthResult> => {
+    setLoading(true);
+    setError(null);
+
     try {
-      await API.post(
-        "/api/v1/auth/logout",
-        {},
+      if (!consents.termsAndPrivacyAccepted) {
+        throw new Error("You must accept the Terms and Privacy Policy");
+      }
+
+      const response = await API.post<AuthApiResponse>(
+        "/api/v1/auth/register",
         {
-          withCredentials: true,
+          name: fullName.trim(),
+          email:
+            email.trim().toLowerCase(),
+          password,
+
+          consents: {
+            essentialCookies: true,
+            termsAndPrivacyAccepted:
+              consents.termsAndPrivacyAccepted,
+            analyticsConsent:
+              consents.analyticsConsent,
+            marketingConsent:
+              consents.marketingConsent,
+          },
         }
       );
 
-      setUser(null);
+      if (response.data.success === false) {
+        throw new Error(response.data.message || "Registration failed.");
+      }
 
-      // Redirect after successful backend logout
-      window.location.replace("/login");
-    } catch (error: unknown) {
-      console.error(
-        "Logout failed. Please try again:",
-        error
+      return {
+        success: true,
+        message: response.data.message,
+        data: response.data,
+      };
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        "Registration failed."
       );
 
-      // Don't claim logout succeeded if the
-      // server did not clear the session cookie.
+      setError(message);
+
+      return {
+        success: false,
+        message,
+      };
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
+
+  // ==================================
+  // Verify OTP
+  // ==================================
+
+  const verifyOtp = async (
+    email: string,
+    otp: string
+  ): Promise<AuthResult> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response =
+        await API.post<AuthApiResponse>(
+          "/api/v1/auth/verify-otp",
+          {
+            email:
+              email.trim().toLowerCase(),
+            otp: otp.trim(),
+          }
+        );
+
+      if (response.data.success === false) {
+        throw new Error(
+          response.data.message ||
+            "OTP verification failed."
+        );
+      }
+
+      // Check whether verification also
+      // established an authenticated session.
+      const currentUser =
+        await checkAuth();
+
+      if (currentUser) {
+        window.location.replace(
+          getDashboardPath(
+            currentUser.role
+          )
+        );
+      } else {
+        window.location.replace(
+          "/login"
+        );
+      }
+
+      return {
+        success: true,
+        message:
+          response.data.message ||
+          "Email verified successfully.",
+      };
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        "OTP verification failed."
+      );
+
+      setError(message);
+
+      return {
+        success: false,
+        message,
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================================
+  // Resend OTP
+  // ==================================
+
+  const resendOtp = async (
+    email: string
+  ): Promise<AuthResult> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await API.post(
+        "/api/v1/auth/resend-otp",
+        {
+          email:
+            email.trim().toLowerCase(),
+        }
+      );
+
+      return {
+        success: true,
+        message:
+          response.data?.message ||
+          "OTP resent successfully.",
+      };
+    } catch (err: unknown) {
+      const message = getErrorMessage(
+        err,
+        "Failed to resend OTP."
+      );
+
+      setError(message);
+
+      return {
+        success: false,
+        message,
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================================
+  // Logout
+  // ==================================
+
+  const logoutUser =
+    useCallback(async (): Promise<void> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        await API.post(
+          "/api/v1/auth/logout",
+          {}
+        );
+
+        setUser(null);
+
+        window.location.replace(
+          "/login"
+        );
+      } catch (err: unknown) {
+        const message = getErrorMessage(
+          err,
+          "Logout failed."
+        );
+
+        setError(message);
+
+        console.error(
+          "Logout failed:",
+          message
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+
+  const refreshUser =
+    useCallback(async (): Promise<void> => {
+      await checkAuth();
+    }, [checkAuth]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        isAuthenticated,
         loading,
-        logout,
+        error,
+        loginUser,
+        signupUser,
+        verifyOtp,
+        resendOtp,
+        logoutUser,
+        checkAuth,
         refreshUser,
+        logout: logoutUser,
       }}
     >
       {children}
@@ -135,9 +531,9 @@ export function AuthProvider({
   );
 }
 
-// Access authentication context
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(
