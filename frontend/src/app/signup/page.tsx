@@ -1,8 +1,6 @@
-
 "use client";
 
-import { useState, useEffect } from "react";
-import type { FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
 
 import Navbar from "@/components/layout/Navbar";
@@ -21,32 +19,24 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 export default function SignUpPage() {
-  const [step, setStep] =
-    useState<"form" | "otp">("form");
+  const [step, setStep] = useState<"form" | "otp">("form");
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState("");
 
   // Consent states
-  const [termsAccepted, setTermsAccepted] =
-    useState(false);
-
-  const [analyticsConsent, setAnalyticsConsent] =
-    useState(false);
-
-  const [marketingConsent, setMarketingConsent] =
-    useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [analyticsConsent, setAnalyticsConsent] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
 
   // OTP resend timer
-  const [resendTimer, setResendTimer] =
-    useState(60);
+  const [resendTimer, setResendTimer] = useState(60);
 
-  const [canResend, setCanResend] =
-    useState(false);
+  // Derived value: no separate state or effect required.
+  const canResend = step === "otp" && resendTimer === 0;
 
   // Authentication directly from AuthContext
   const {
@@ -66,8 +56,7 @@ export default function SignUpPage() {
     hasSpecial: /[^A-Za-z0-9]/.test(password),
   };
 
-  const isPasswordStrong =
-    Object.values(rules).every(Boolean);
+  const isPasswordStrong = Object.values(rules).every(Boolean);
 
   // OTP countdown
   useEffect(() => {
@@ -76,19 +65,10 @@ export default function SignUpPage() {
     }
 
     const timer = setTimeout(() => {
-      setResendTimer((previous) =>
-        Math.max(0, previous - 1)
-      );
+      setResendTimer((previous) => Math.max(0, previous - 1));
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [step, resendTimer]);
-
-  // Enable resend when countdown reaches zero
-  useEffect(() => {
-    if (step === "otp" && resendTimer === 0) {
-      setCanResend(true);
-    }
   }, [step, resendTimer]);
 
   // =====================================
@@ -103,9 +83,7 @@ export default function SignUpPage() {
     if (loading) return;
 
     if (!isPasswordStrong) {
-      alert(
-        "Please ensure your password meets all security criteria."
-      );
+      alert("Please ensure your password meets all security criteria.");
       return;
     }
 
@@ -116,8 +94,7 @@ export default function SignUpPage() {
       return;
     }
 
-    const normalizedEmail =
-      email.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
 
     try {
       const result = await signupUser(
@@ -136,17 +113,11 @@ export default function SignUpPage() {
         setOtp("");
         setStep("otp");
         setResendTimer(60);
-        setCanResend(false);
       } else {
-        alert(
-          result.message ||
-            "Failed to register. Please try again."
-        );
+        alert(result.message || "Failed to register. Please try again.");
       }
     } catch {
-      alert(
-        "Registration failed. Please try again."
-      );
+      alert("Registration failed. Please try again.");
     }
   };
 
@@ -162,31 +133,20 @@ export default function SignUpPage() {
     if (loading) return;
 
     if (!/^\d{6}$/.test(otp)) {
-      alert(
-        "Please enter a valid 6-digit verification code."
-      );
+      alert("Please enter a valid 6-digit verification code.");
       return;
     }
 
     try {
-      const result = await verifyOtp(
-        email,
-        otp
-      );
+      const result = await verifyOtp(email, otp);
 
       if (!result.success) {
-        alert(
-          result.message ||
-            "Invalid OTP code."
-        );
+        alert(result.message || "Invalid OTP code.");
       }
 
-      // Successful verification redirects
-      // through AuthContext.
+      // Successful verification redirects through AuthContext.
     } catch {
-      alert(
-        "OTP verification failed. Please try again."
-      );
+      alert("OTP verification failed. Please try again.");
     }
   };
 
@@ -194,35 +154,26 @@ export default function SignUpPage() {
   // Resend OTP
   // =====================================
 
-  const handleResendOtpCode =
-    async (): Promise<void> => {
-      if (!canResend || loading) return;
+  const handleResendOtpCode = async (): Promise<void> => {
+    if (!canResend || loading) return;
 
-      try {
-        const result = await resendOtp(
-          email
-        );
+    try {
+      const result = await resendOtp(email);
 
-        if (result.success) {
-          alert(
-            "Verification code has been successfully resent to your email."
-          );
-
-          setOtp("");
-          setResendTimer(60);
-          setCanResend(false);
-        } else {
-          alert(
-            result.message ||
-              "Failed to resend OTP."
-          );
-        }
-      } catch {
+      if (result.success) {
         alert(
-          "Failed to resend OTP. Please try again."
+          "Verification code has been successfully resent to your email."
         );
+
+        setOtp("");
+        setResendTimer(60);
+      } else {
+        alert(result.message || "Failed to resend OTP.");
       }
-    };
+    } catch {
+      alert("Failed to resend OTP. Please try again.");
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fff3ec] text-[#121212] font-sans">
@@ -231,7 +182,6 @@ export default function SignUpPage() {
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md bg-white rounded-3xl p-8 border border-[#fb8500]/20 shadow-xl shadow-[#fb8500]/5">
           {/* Error Message */}
-
           {error && (
             <div
               role="alert"
@@ -244,7 +194,6 @@ export default function SignUpPage() {
           {step === "form" ? (
             <>
               {/* Signup heading */}
-
               <div className="text-center mb-8">
                 <h1 className="text-3xl font-black text-[#121212] mb-2">
                   Create Account
@@ -256,7 +205,6 @@ export default function SignUpPage() {
               </div>
 
               {/* Login / Signup tabs */}
-
               <div className="flex bg-[#fff3ec] p-1.5 rounded-2xl mb-8 border border-[#fb8500]/10">
                 <Link
                   href="/login"
@@ -274,13 +222,11 @@ export default function SignUpPage() {
               </div>
 
               {/* Registration form */}
-
               <form
                 onSubmit={handleRegisterSubmit}
                 className="space-y-5"
               >
                 {/* Full Name */}
-
                 <div>
                   <label
                     htmlFor="signup-name"
@@ -300,9 +246,7 @@ export default function SignUpPage() {
                       type="text"
                       required
                       value={fullName}
-                      onChange={(e) =>
-                        setFullName(e.target.value)
-                      }
+                      onChange={(e) => setFullName(e.target.value)}
                       placeholder="John Doe"
                       autoComplete="name"
                       disabled={loading}
@@ -312,7 +256,6 @@ export default function SignUpPage() {
                 </div>
 
                 {/* Email Address */}
-
                 <div>
                   <label
                     htmlFor="signup-email"
@@ -332,9 +275,7 @@ export default function SignUpPage() {
                       type="email"
                       required
                       value={email}
-                      onChange={(e) =>
-                        setEmail(e.target.value)
-                      }
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@example.com"
                       autoComplete="email"
                       disabled={loading}
@@ -344,7 +285,6 @@ export default function SignUpPage() {
                 </div>
 
                 {/* Password */}
-
                 <div>
                   <label
                     htmlFor="signup-password"
@@ -361,16 +301,10 @@ export default function SignUpPage() {
 
                     <input
                       id="signup-password"
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
+                      type={showPassword ? "text" : "password"}
                       required
                       value={password}
-                      onChange={(e) =>
-                        setPassword(e.target.value)
-                      }
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="8+ chars, Uppercase, Number, Special"
                       autoComplete="new-password"
                       disabled={loading}
@@ -380,14 +314,10 @@ export default function SignUpPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setShowPassword(
-                          (previous) => !previous
-                        )
+                        setShowPassword((previous) => !previous)
                       }
                       aria-label={
-                        showPassword
-                          ? "Hide password"
-                          : "Show password"
+                        showPassword ? "Hide password" : "Show password"
                       }
                       aria-pressed={showPassword}
                       className="absolute right-4 text-[#888888] hover:text-[#fb8500]"
@@ -401,7 +331,6 @@ export default function SignUpPage() {
                   </div>
 
                   {/* Password requirements */}
-
                   {password.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2.5">
                       {[
@@ -435,10 +364,7 @@ export default function SignUpPage() {
                           }`}
                         >
                           {rule.valid ? (
-                            <CheckIcon
-                              size={12}
-                              weight="bold"
-                            />
+                            <CheckIcon size={12} weight="bold" />
                           ) : (
                             <XIcon size={12} />
                           )}
@@ -451,7 +377,6 @@ export default function SignUpPage() {
                 </div>
 
                 {/* Terms and Consents */}
-
                 <div className="space-y-3 pt-2 text-xs">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
@@ -459,9 +384,7 @@ export default function SignUpPage() {
                       required
                       checked={termsAccepted}
                       onChange={(e) =>
-                        setTermsAccepted(
-                          e.target.checked
-                        )
+                        setTermsAccepted(e.target.checked)
                       }
                       disabled={loading}
                       className="mt-0.5 accent-[#fb8500] rounded"
@@ -491,9 +414,7 @@ export default function SignUpPage() {
                       type="checkbox"
                       checked={analyticsConsent}
                       onChange={(e) =>
-                        setAnalyticsConsent(
-                          e.target.checked
-                        )
+                        setAnalyticsConsent(e.target.checked)
                       }
                       disabled={loading}
                       className="mt-0.5 accent-[#fb8500] rounded"
@@ -510,9 +431,7 @@ export default function SignUpPage() {
                       type="checkbox"
                       checked={marketingConsent}
                       onChange={(e) =>
-                        setMarketingConsent(
-                          e.target.checked
-                        )
+                        setMarketingConsent(e.target.checked)
                       }
                       disabled={loading}
                       className="mt-0.5 accent-[#fb8500] rounded"
@@ -526,7 +445,6 @@ export default function SignUpPage() {
                 </div>
 
                 {/* Register Button */}
-
                 <button
                   type="submit"
                   disabled={
@@ -536,15 +454,10 @@ export default function SignUpPage() {
                   }
                   className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading
-                    ? "Sending OTP..."
-                    : "Continue"}
+                  {loading ? "Sending OTP..." : "Continue"}
 
                   {!loading && (
-                    <ArrowRightIcon
-                      size={20}
-                      weight="bold"
-                    />
+                    <ArrowRightIcon size={20} weight="bold" />
                   )}
                 </button>
               </form>
@@ -562,13 +475,9 @@ export default function SignUpPage() {
           ) : (
             <>
               {/* OTP Verification */}
-
               <div className="text-center mb-8">
                 <div className="w-16 h-16 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#fb8500]/20">
-                  <ShieldCheckIcon
-                    size={32}
-                    weight="duotone"
-                  />
+                  <ShieldCheckIcon size={32} weight="duotone" />
                 </div>
 
                 <h1 className="text-2xl font-black text-[#121212] mb-2">
@@ -620,20 +529,13 @@ export default function SignUpPage() {
 
                 <button
                   type="submit"
-                  disabled={
-                    loading || otp.length !== 6
-                  }
+                  disabled={loading || otp.length !== 6}
                   className="w-full py-4 bg-[#fb8500] hover:bg-[#e07600] text-white font-bold rounded-2xl transition-all shadow-lg shadow-[#fb8500]/30 flex items-center justify-center gap-2 text-base disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading
-                    ? "Verifying..."
-                    : "Verify & Proceed"}
+                  {loading ? "Verifying..." : "Verify & Proceed"}
 
                   {!loading && (
-                    <ArrowRightIcon
-                      size={20}
-                      weight="bold"
-                    />
+                    <ArrowRightIcon size={20} weight="bold" />
                   )}
                 </button>
 
@@ -641,9 +543,7 @@ export default function SignUpPage() {
                   <button
                     type="button"
                     onClick={handleResendOtpCode}
-                    disabled={
-                      !canResend || loading
-                    }
+                    disabled={!canResend || loading}
                     className={`text-xs font-bold transition-colors ${
                       canResend
                         ? "text-[#fb8500] hover:underline cursor-pointer"
@@ -657,9 +557,7 @@ export default function SignUpPage() {
 
                   <button
                     type="button"
-                    onClick={() =>
-                      setStep("form")
-                    }
+                    onClick={() => setStep("form")}
                     disabled={loading}
                     className="text-xs font-bold text-[#555555] hover:text-[#fb8500]"
                   >

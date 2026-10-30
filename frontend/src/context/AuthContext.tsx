@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -215,12 +214,23 @@ export function AuthProvider({
 
     // Public auth pages do not need a protected /users/me request.
     const path = window.location.pathname;
-    if (path === "/login" || path === "/signup" || path === "/verify-otp") {
-      setLoading(false);
+
+    if (
+      path === "/login" ||
+      path === "/signup" ||
+      path === "/verify-otp"
+    ) {
+      queueMicrotask(() => {
+        setLoading(false);
+      });
       return;
     }
 
-    void checkAuth();
+    queueMicrotask(() => {
+      if (initialCheckStarted.current) {
+        void checkAuth();
+      }
+    });
   }, [checkAuth]);
 
   // ==================================
@@ -307,7 +317,9 @@ export function AuthProvider({
 
     try {
       if (!consents.termsAndPrivacyAccepted) {
-        throw new Error("You must accept the Terms and Privacy Policy");
+        throw new Error(
+          "You must accept the Terms and Privacy Policy"
+        );
       }
 
       const response = await API.post<AuthApiResponse>(
@@ -331,7 +343,9 @@ export function AuthProvider({
       );
 
       if (response.data.success === false) {
-        throw new Error(response.data.message || "Registration failed.");
+        throw new Error(
+          response.data.message || "Registration failed."
+        );
       }
 
       return {
