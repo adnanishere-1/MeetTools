@@ -1,40 +1,60 @@
+
+# ==========================================
+# MeetTools - Professional .gitignore
+# Next.js + Express + TypeScript + BullMQ
+# ==========================================
+
 # ==========================================
 # Dependencies & Package Managers
 # ==========================================
 node_modules/
 .pnpm-store/
 .yarn/
-.yarn/cache
-.yarn/unplugged
+.yarn/cache/
+.yarn/unplugged/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+.npm/
 
 # ==========================================
-# Environment Variables & Secrets (CRITICAL)
+# Environment Variables & Secrets
 # ==========================================
 .env
-.env*
-!.env.example
+.env.*
 *.env
+*.env.local
+
+# Allow safe example environment files
+!.env.example
+!.env.*.example
+
+# Private keys and certificates
 *.pem
-*.crt
 *.key
+*.p12
 *.pfx
+
+# Local credentials
+credentials.json
+service-account*.json
+secrets.json
 
 # ==========================================
 # TypeScript & Build Outputs
 # ==========================================
-# Backend Build Outputs
 dist/
 build/
 out/
 *.tsbuildinfo
 
-# Frontend (Next.js) Build Outputs
+# ==========================================
+# Next.js Build Outputs
+# ==========================================
 .next/
 export/
-next-env.d.ts
+
+# Keep next-env.d.ts tracked by Git
 
 # ==========================================
 # Logs & Debugging
@@ -49,35 +69,38 @@ lerna-debug.log*
 pm2.log
 
 # ==========================================
-# Redis & Persistent Temporary Files
+# Redis & Local Database Files
 # ==========================================
 dump.rdb
+appendonly.aof
+appendonlydir/
 *.sqlite
+*.sqlite3
 *.db
 
 # ==========================================
-# Multer & Local Upload Repositories
+# Uploads & Temporary Files
 # ==========================================
 uploads/
 tmp/
 temp/
 .tmp/
+*.tmp
 
 # ==========================================
-# Operating System & IDE Files
+# Operating System Files
 # ==========================================
-# macOS
 .DS_Store
-.apple-desktop
+.AppleDouble
 .LSOverride
-
-# Windows
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 Desktop.ini
 
-# IDEs & Editors
+# ==========================================
+# IDE & Editor Files
+# ==========================================
 .vscode/
 !.vscode/extensions.json
 .idea/
@@ -92,6 +115,18 @@ Desktop.ini
 coverage/
 .nyc_output/
 .jest/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+*.lcov
+
+# ==========================================
+# Performance Testing Outputs
+# ==========================================
+k6-results/
+load-test-results/
+performance-results/
 
 # ==========================================
 # Cache Directories
@@ -99,9 +134,28 @@ coverage/
 .cache/
 .eslintcache
 .stylelintcache
-.turbo
+.turbo/
+.parcel-cache/
 
 # ==========================================
-# Deployment
+# Local Deployment Artifacts
 # ==========================================
-.vercel
+.vercel/
+.netlify/
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# ==========================================
+# IMPORTANT: Keep these tracked
+# ==========================================
+# .github/workflows/
+# .github/dependabot.yml
+# Backend/src/
+# frontend/src/
+# tests/
+# package.json
+# package-lock.json
+# tsconfig.json
+# next.config.ts
+# next-env.d.ts
