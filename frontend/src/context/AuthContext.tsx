@@ -212,14 +212,18 @@ export function AuthProvider({
     if (initialCheckStarted.current) return;
     initialCheckStarted.current = true;
 
-    // Public auth pages do not need a protected /users/me request.
+    // Public pages support guest use and do not need an initial
+    // protected /users/me request.
     const path = window.location.pathname;
-
-    if (
+    const isPublicPage =
+      path === "/" ||
       path === "/login" ||
       path === "/signup" ||
-      path === "/verify-otp"
-    ) {
+      path === "/verify-otp" ||
+      path === "/tools" ||
+      path.startsWith("/tools/");
+
+    if (isPublicPage) {
       queueMicrotask(() => {
         setLoading(false);
       });

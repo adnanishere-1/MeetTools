@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
 import Navbar from "@/components/layout/Navbar";
 import {
   UploadSimpleIcon, SlidersHorizontalIcon, DownloadSimpleIcon,
@@ -10,7 +11,6 @@ import {
   RocketIcon, RepeatIcon, UserIcon
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import axios from "axios";
 
 type ConsentStatus = "loading" | "pending" | "accepted" | "rejected";
 
@@ -34,41 +34,8 @@ export default function Home() {
   const [cookieConsent, setCookieConsent] = useState<ConsentStatus>("loading");
 
   useEffect(() => {
-    let active = true;
-
-    const checkConsentAndUser = async () => {
-      const savedConsent = readConsentCookie();
-
-      try {
-        const response = await axios.get("/api/v1/users/me", {
-          withCredentials: true,
-        });
-
-        const userData = response.data?.user;
-        const consents = userData?.consents;
-
-        if (consents?.consentGivenAt) {
-          const status: ConsentStatus = consents.termsAndPrivacyAccepted
-            ? "accepted"
-            : "rejected";
-          if (active) {
-            setCookieConsent(status);
-            saveConsentCookie(status);
-          }
-          return;
-        }
-      } catch (error: unknown) {
-        // Guests are expected to receive 401 from /users/me.
-        if (!axios.isAxiosError(error) || error.response?.status !== 401) {
-          console.error("Could not load cookie consent from profile:", error);
-        }
-      }
-
-      if (active) setCookieConsent(savedConsent || "pending");
-    };
-
-    void checkConsentAndUser();
-    return () => { active = false; };
+    const savedConsent = readConsentCookie();
+    setCookieConsent(savedConsent || "pending");
   }, []);
 
   const handleConsentAction = async (consentStatus: "accepted" | "rejected") => {
@@ -83,7 +50,8 @@ export default function Home() {
       );
     } catch (error: unknown) {
       // Guests may not have an authenticated profile to update.
-      if (!axios.isAxiosError(error) || error.response?.status !== 401) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (!axios.isAxiosError(error) || status !== 401) {
         console.error("Failed to save cookie consent to database:", error);
       }
     }

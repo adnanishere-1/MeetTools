@@ -9,67 +9,17 @@ import {
   SignOutIcon,
   CrownIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
-
-interface User {
-  id?: string;
-  _id?: string;
-  name: string;
-  email: string;
-  role: "admin" | "user";
-}
-
-interface SessionResponse {
-  user?: User;
-  data?: {
-    user?: User;
-  };
-}
+import { useAuth } from "@/context/AuthContext";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-
-    const fetchUserSession = async () => {
-      try {
-        const response = await axios.get<SessionResponse>(
-          "/api/v1/users/me",
-          {
-            withCredentials: true,
-          }
-        );
-
-        if (!active) return;
-
-        const currentUser =
-          response.data.user ||
-          response.data.data?.user ||
-          null;
-
-        setUser(currentUser);
-      } catch (error) {
-        if (!active) return;
-
-        setUser(null);
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchUserSession();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  // AuthContext is the single source of truth for the session.
+  // Navbar must not make its own /api/v1/users/me request.
+  const { user, loading } = useAuth();
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -438,3 +388,7 @@ export default function Navbar() {
     </nav>
   );
 }
+function setUser(arg0: null) {
+  throw new Error("Function not implemented.");
+}
+
