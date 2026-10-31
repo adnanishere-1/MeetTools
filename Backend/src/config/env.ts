@@ -1,8 +1,7 @@
 
-import "dotenv";
-config();
+import "dotenv/config";
 
-import { config, z } from "zod";
+import { z } from "zod";
 
 // =====================================
 // Reusable Validators
@@ -32,11 +31,7 @@ const envSchema = z.object({
   PORT: portSchema.default(5000),
 
   NODE_ENV: z
-    .enum([
-      "development",
-      "production",
-      "test",
-    ])
+    .enum(["development", "production", "test"])
     .default("development"),
 
   // MongoDB
@@ -50,6 +45,20 @@ const envSchema = z.object({
     .default("localhost"),
 
   REDIS_PORT: portSchema.default(6379),
+
+  REDIS_USERNAME: z
+    .string()
+    .trim()
+    .optional(),
+
+  REDIS_PASSWORD: z
+    .string()
+    .optional(),
+
+  REDIS_TLS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 
   // JWT
   JWT_SECRET: requiredString("JWT_SECRET"),
@@ -67,8 +76,9 @@ const envSchema = z.object({
     "IMAGEKIT_PRIVATE_KEY"
   ),
 
-  IMAGEKIT_URL_ENDPOINT: z
-    .url("IMAGEKIT_URL_ENDPOINT must be a valid URL"),
+  IMAGEKIT_URL_ENDPOINT: z.url(
+    "IMAGEKIT_URL_ENDPOINT must be a valid URL"
+  ),
 
   // Optional email configuration
   EMAIL_USER: z
@@ -90,9 +100,7 @@ const envSchema = z.object({
 // Validate Environment Variables
 // =====================================
 
-const parsedEnv = envSchema.safeParse(
-  process.env
-);
+const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
   console.error(

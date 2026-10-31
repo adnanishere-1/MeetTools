@@ -1,5 +1,5 @@
 
-import Redis from "ioredis";
+import Redis, { type RedisOptions } from "ioredis";
 
 import { env } from "./env.js";
 import { logger } from "../utils/logger.js";
@@ -15,115 +15,59 @@ if (
   redisPort < 1 ||
   redisPort > 65535
 ) {
-  throw new Error(
-    "Invalid REDIS_PORT configuration"
-  );
+  throw new Error("Invalid REDIS_PORT configuration");
 }
 
-// =====================================
-// Shared Redis Connection
-// =====================================
-
-export const redis = new Redis({
+export const redisConnectionOptions: RedisOptions = {
   host: env.REDIS_HOST,
   port: redisPort,
 
-  // Required for BullMQ workers.
+  ...(env.REDIS_USERNAME
+    ? { username: env.REDIS_USERNAME }
+    : {}),
+
+  ...(env.REDIS_PASSWORD
+    ? { password: env.REDIS_PASSWORD }
+    : {}),
+
+  ...(env.REDIS_TLS
+    ? { tls: {} }
+    : {}),
+
   maxRetriesPerRequest: null,
 
-  // Reconnect automatically.
   retryStrategy(times) {
     return Math.min(times * 200, 3000);
   },
 
-  // Prevent connection from hanging forever.
   connectTimeout: 10000,
-
-  // Keep TCP connection alive.
   keepAlive: 30000,
-
-  // Avoid automatically resending
-  // unfulfilled commands after reconnect.
   autoResendUnfulfilledCommands: false,
-});
+};
 
 // =====================================
-// Redis Events
+// Shared Redis Client
 // =====================================
 
-// TCP connection established.
+export const redis = new Redis(
+  redisConnectionOptions
+);
+
 redis.on("connect", () => {
-  logger.info(
-    "🔌 MeetTools Redis connection established"
-  );
+  logger.info("🔌 Connecting to Redis...");
 });
 
-// Redis is ready to accept commands.
 redis.on("ready", () => {
-  logger.info(
-    "📦 Successfully connected to Redis"
-  );
+  logger.info("✅ Redis connection established.");
 });
 
-// Redis connection errors.
-redis.on("error", (error: Error) => {
+redis.on("error", (error) => {
   logger.error(
     { err: error },
     "❌ Redis connection error"
   );
 });
 
-// Redis connection closed.
-redis.on("close", () => {
-  logger.warn(
-    "⚠️ Redis connection closed"
-  );
+redis.on("reconnecting", () => {
+  logger.warn("♻️ Reconnecting to Redis...");
 });
-
-// Redis reconnect attempts.
-redis.on("reconnecting", (delay: number) => {
-  logger.warn(
-    { delayMs: delay },
-    "🔄 Reconnecting to Redis..."
-  );
-});
-
-// Redis connection ended permanently.
-redis.on("end", () => {
-  logger.warn(
-    "🛑 Redis connection ended"
-  );
-});
-
-// =====================================
-// Graceful Shutdown
-// =====================================
-
-export const disconnectRedis =
-  async (): Promise<void> => {
-    try {
-      if (redis.status === "end") {
-        return;
-      }
-
-      if (
-        redis.status === "ready" ||
-        redis.status === "connect"
-      ) {
-        await redis.quit();
-      } else {
-        redis.disconnect();
-      }
-
-      logger.info(
-        "✅ Redis disconnected successfully"
-      );
-    } catch (error: unknown) {
-      logger.error(
-        { err: error },
-        "❌ Failed to disconnect Redis"
-      );
-
-      redis.disconnect();
-    }
-  };
