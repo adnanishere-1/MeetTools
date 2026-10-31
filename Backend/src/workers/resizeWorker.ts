@@ -3,6 +3,7 @@ import "dotenv/config";
 
 import mongoose from "mongoose";
 import { createHash } from "node:crypto";
+import IORedis from "ioredis";
 
 import {
   Worker,
@@ -10,6 +11,7 @@ import {
 } from "bullmq";
 
 import { imagekit } from "../config/imagekit.js";
+import { redisConnectionOptions } from "../config/redis.js";
 import { logger } from "../utils/logger.js";
 import { ActivityLog } from "../models/ActivityLog.model.js";
 
@@ -54,38 +56,8 @@ type ImageKitTransformation = {
 };
 
 // =====================================
-// Redis Configuration
-// =====================================
-
-const redisPort = Number(
-  process.env.REDIS_PORT || 6379
-);
-
-if (
-  !Number.isInteger(redisPort) ||
-  redisPort < 1 ||
-  redisPort > 65535
-) {
-  throw new Error(
-    "Invalid REDIS_PORT environment variable."
-  );
-}
-
-const redisConnection = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: redisPort,
-  password: process.env.REDIS_PASSWORD || undefined,
-
-  // Required for BullMQ Worker connections.
-  maxRetriesPerRequest: null,
-};
-
-// =====================================
 // MongoDB Connection For Activity Logs
 // =====================================
-
-// Reuse an existing MongoDB connection if
-// the worker runs inside the API process.
 
 let mongoConnectionPromise:
   Promise<typeof mongoose> | null = null;
@@ -164,9 +136,7 @@ function validateSourceUrl(
     typeof fileUrl !== "string" ||
     !fileUrl.trim()
   ) {
-    throw new Error(
-      "Missing source image URL."
-    );
+    throw new Error("Missing source image URL.");
   }
 
   let parsedUrl: URL;
@@ -174,9 +144,7 @@ function validateSourceUrl(
   try {
     parsedUrl = new URL(fileUrl);
   } catch {
-    throw new Error(
-      "Invalid source image URL."
-    );
+    throw new Error("Invalid source image URL.");
   }
 
   if (
@@ -206,10 +174,6 @@ async function recordToolUsage(
 
     const identifier = job.data.userId;
 
-    // Controller sends either:
-    // user:<MongoDB ObjectId>
-    // guest:<IP address>
-
     const authenticatedUserId =
       typeof identifier === "string" &&
       identifier.startsWith("user:")
@@ -218,21 +182,16 @@ async function recordToolUsage(
 
     const userId =
       authenticatedUserId &&
-      mongoose.isValidObjectId(
-        authenticatedUserId
-      )
+      mongoose.isValidObjectId(authenticatedUserId)
         ? new mongoose.Types.ObjectId(
             authenticatedUserId
           )
         : null;
 
-    // A deterministic activity ID prevents
-    // duplicate counts when BullMQ retries
-    // the same job.
     const activityId = new mongoose.Types.ObjectId(
       createHash("sha256")
         .update(
-          `meettools:image-resize:${job.queueName}:${job.id}`
+          `meetools:image-resize:${job.queueName}:${job.id}`
         )
         .digest()
         .subarray(0, 12)
@@ -270,8 +229,6 @@ async function recordToolUsage(
       );
     }
   } catch (error: unknown) {
-    // Analytics errors must not break
-    // successful image processing.
     logger.error(
       {
         err: error,
@@ -302,12 +259,10 @@ const processResizeJob = async (
   );
 
   try {
-    // Step 1: Validate source image.
     validateSourceUrl(fileUrl);
 
     await job.updateProgress(20);
 
-    // Step 2: Validate transformations.
     const width = validateInteger(
       transformations?.width,
       "width",
@@ -351,10 +306,8 @@ const processResizeJob = async (
 
     await job.updateProgress(40);
 
-    // Step 3: Build ImageKit transformations.
     const transformation: ImageKitTransformation[] = [];
 
-    // Preserve aspect ratio when resizing.
     if (width !== null || height !== null) {
       const dimensionTransformation:
         ImageKitTransformation = {
@@ -370,12 +323,9 @@ const processResizeJob = async (
         dimensionTransformation.height = String(height);
       }
 
-      transformation.push(
-        dimensionTransformation
-      );
+      transformation.push(dimensionTransformation);
     }
 
-    // Apply quality, format and sharpening.
     transformation.push({
       quality: String(quality ?? 90),
       format,
@@ -384,19 +334,12 @@ const processResizeJob = async (
 
     await job.updateProgress(60);
 
-    // Step 4: Generate ImageKit resized URL.
     const resizedUrl = imagekit.url({
       src: fileUrl,
       transformation,
     });
 
     await job.updateProgress(80);
-
-    // Step 5: Return controller-compatible result.
-    //
-    // Original image is NOT deleted.
-    // fileSize is original file size, not
-    // measured resized output size.
 
     const result: ResizeJobResult = {
       success: true,
@@ -415,8 +358,6 @@ const processResizeJob = async (
       height,
     };
 
-    // Record this tool execution for
-    // Admin Dashboard analytics.
     await recordToolUsage(job, {
       width,
       height,
@@ -451,10 +392,10 @@ export const resizeWorker = new Worker<
   ResizeJobData,
   ResizeJobResult
 >(
-  "meettools-resize-queue",
+  "meetools-resize-queue",
   processResizeJob,
   {
-    connection: redisConnection,
+    connection: new IORedis(redisConnectionOptions),
     concurrency: 5,
   }
 );

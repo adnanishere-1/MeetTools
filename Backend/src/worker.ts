@@ -1,11 +1,14 @@
 
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
-import { Worker, type Job as BullJob } from "bullmq";
+import {
+  Worker,
+  type Job as BullJob,
+} from "bullmq";
 
-import { logger } from "./utils/logger.js";
 import { imagekit } from "./config/imagekit.js";
+import { redisConnectionOptions } from "./config/redis.js";
+import { logger } from "./utils/logger.js";
 
 // =====================================
 // Types
@@ -33,17 +36,6 @@ interface ImageKitTransformation {
   quality?: string;
   format?: string;
 }
-
-// =====================================
-// Redis Configuration
-// =====================================
-
-const redisConnection = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: Number(process.env.REDIS_PORT) || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  maxRetriesPerRequest: null,
-};
 
 // =====================================
 // Transformation Helpers
@@ -117,9 +109,8 @@ function buildTransformations(
   }
 
   if (transformations.format) {
-    const requestedFormat = transformations.format
-      .trim()
-      .toLowerCase();
+    const requestedFormat =
+      transformations.format.trim().toLowerCase();
 
     const normalizedFormat =
       requestedFormat === "jpg"
@@ -157,7 +148,7 @@ async function startWorker(): Promise<void> {
   );
 
   const worker = new Worker<ResizeJobData>(
-    "meettools-resize-queue",
+    "meetools-resize-queue",
 
     async (bullJob: BullJob<ResizeJobData>) => {
       const {
@@ -174,7 +165,6 @@ async function startWorker(): Promise<void> {
       );
 
       try {
-        // Step 1: Validate job data
         if (!userId) {
           throw new Error(
             "Missing userId in resize job."
@@ -208,13 +198,11 @@ async function startWorker(): Promise<void> {
 
         await bullJob.updateProgress(20);
 
-        // Step 2: Prepare transformations
         const transformArray =
           buildTransformations(transformations);
 
         await bullJob.updateProgress(40);
 
-        // Step 3: Generate transformed ImageKit URL
         let finalOutputUrl = fileUrl;
 
         if (transformArray.length > 0) {
@@ -226,10 +214,6 @@ async function startWorker(): Promise<void> {
 
         await bullJob.updateProgress(70);
 
-        // Step 4: Preserve original file
-        // Original ImageKit file is NOT deleted.
-        // User can reuse it from the Dashboard.
-
         const requestedWidth =
           transformations?.width !== undefined
             ? Number(transformations.width)
@@ -240,7 +224,6 @@ async function startWorker(): Promise<void> {
             ? Number(transformations.height)
             : undefined;
 
-        // Step 5: Prepare result
         const result = {
           success: true,
 
@@ -248,17 +231,13 @@ async function startWorker(): Promise<void> {
             fileId ||
             `resized_${bullJob.id ?? Date.now()}`,
 
-          // ImageKit transformed image URL
           url: finalOutputUrl,
-
-          // Same URL used for download
           downloadUrl: finalOutputUrl,
 
           fileName:
             originalFileName ||
             "processed-image.webp",
 
-          // Original file size, not transformed size
           fileSize:
             typeof originalSize === "number" &&
             Number.isFinite(originalSize) &&
@@ -279,7 +258,11 @@ async function startWorker(): Promise<void> {
         return result;
       } catch (error: unknown) {
         logger.error(
-          `❌ Error processing job ${bullJob.id}: ${error instanceof Error ? error.message : String(error)}`
+          `❌ Error processing job ${bullJob.id}: ${
+            error instanceof Error
+              ? error.message
+              : String(error)
+          }`
         );
 
         throw error;
@@ -287,7 +270,9 @@ async function startWorker(): Promise<void> {
     },
 
     {
-      connection: redisConnection,
+      connection: {
+        ...redisConnectionOptions,
+      } as import("bullmq").WorkerOptions["connection"],
       concurrency: 2,
     }
   );
@@ -310,7 +295,9 @@ async function startWorker(): Promise<void> {
 
   worker.on("failed", (job, error) => {
     logger.error(
-      `❌ BullMQ Job failed: ${job?.id ?? "unknown"} - ${error.message}`
+      `❌ BullMQ Job failed: ${
+        job?.id ?? "unknown"
+      } - ${error.message}`
     );
   });
 

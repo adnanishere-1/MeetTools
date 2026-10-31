@@ -7,6 +7,7 @@ import {
 } from "bullmq";
 
 import { imagekit } from "../config/imagekit.js";
+import { redisConnectionOptions } from "../config/redis.js";
 import { logger } from "../utils/logger.js";
 
 // =====================================
@@ -26,33 +27,6 @@ interface CleanJobResult {
 }
 
 // =====================================
-// Redis Configuration
-// =====================================
-
-const redisPort = Number(
-  process.env.REDIS_PORT || 6379
-);
-
-if (
-  !Number.isInteger(redisPort) ||
-  redisPort < 1 ||
-  redisPort > 65535
-) {
-  throw new Error(
-    "Invalid REDIS_PORT configuration."
-  );
-}
-
-const redisConnection = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: redisPort,
-  password: process.env.REDIS_PASSWORD || undefined,
-
-  // Required for BullMQ workers.
-  maxRetriesPerRequest: null,
-};
-
-// =====================================
 // Validation Helpers
 // =====================================
 
@@ -64,27 +38,21 @@ function validateCleanJob(
     typeof data.userId !== "string" ||
     !data.userId.trim()
   ) {
-    throw new Error(
-      "Missing or invalid userId."
-    );
+    throw new Error("Missing or invalid userId.");
   }
 
   if (
     typeof data.fileId !== "string" ||
     !data.fileId.trim()
   ) {
-    throw new Error(
-      "Missing or invalid fileId."
-    );
+    throw new Error("Missing or invalid fileId.");
   }
 
   if (
     typeof data.fileUrl !== "string" ||
     !data.fileUrl.trim()
   ) {
-    throw new Error(
-      "Missing or invalid fileUrl."
-    );
+    throw new Error("Missing or invalid fileUrl.");
   }
 
   let parsedUrl: URL;
@@ -92,9 +60,7 @@ function validateCleanJob(
   try {
     parsedUrl = new URL(data.fileUrl);
   } catch {
-    throw new Error(
-      "Invalid image URL."
-    );
+    throw new Error("Invalid image URL.");
   }
 
   if (
@@ -105,12 +71,6 @@ function validateCleanJob(
       "Image URL must use HTTP or HTTPS."
     );
   }
-
-  // IMPORTANT:
-  // URL validation alone does not prove that
-  // the image belongs to the authenticated user.
-  // The API creating this queue job must check
-  // ownership before adding the job.
 }
 
 // =====================================
@@ -131,19 +91,9 @@ const processCleanJob = async (
   );
 
   try {
-    // Step 1: Validate job data.
     validateCleanJob(job.data);
 
     await job.updateProgress(20);
-
-    // Step 2: Generate ImageKit optimized URL.
-    //
-    // quality: 85 = quality optimization
-    // format: auto = automatic format selection
-    //
-    // NOTE:
-    // This URL generation does not guarantee
-    // permanent metadata removal.
 
     const cleanedUrl = imagekit.url({
       src: fileUrl,
@@ -156,11 +106,6 @@ const processCleanJob = async (
     });
 
     await job.updateProgress(70);
-
-    // Step 3: Preserve the original image.
-    //
-    // Original file is NOT deleted.
-    // User can reuse the image from Dashboard.
 
     const result: CleanJobResult = {
       success: true,
@@ -197,12 +142,12 @@ export const cleanWorker = new Worker<
   CleanJobData,
   CleanJobResult
 >(
-  "meettools-clean-queue",
+  "meetools-clean-queue",
   processCleanJob,
   {
-    connection: redisConnection,
-
-    // Lightweight URL generation jobs.
+    connection: {
+      redisConnectionOptions,
+    },
     concurrency: 10,
   }
 );
@@ -245,13 +190,6 @@ cleanWorker.on("error", (error) => {
 // =====================================
 // Graceful Shutdown
 // =====================================
-
-// If this worker runs in a dedicated process,
-// call closeCleanWorker() during shutdown.
-//
-// If multiple workers run in one process,
-// close all of them from the central server
-// shutdown handler.
 
 export async function closeCleanWorker():
   Promise<void> {
