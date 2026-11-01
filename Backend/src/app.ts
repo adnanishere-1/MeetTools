@@ -1,4 +1,3 @@
-
 import express, {
   type Application,
   type Request,
@@ -23,6 +22,9 @@ import adminroutes from "./routes/admin.routes.js";
 
 const app: Application = express();
 
+// Render reverse proxy configuration
+app.set("trust proxy", 1);
+
 const isProduction = process.env.NODE_ENV === "production";
 
 // Support multiple frontend URLs separated by commas.
@@ -32,7 +34,7 @@ const configuredOrigins = [
 ]
   .filter((value): value is string => Boolean(value))
   .flatMap((value) => value.split(","))
-  .map((value) => value.trim().replace(/\/$/, ""))
+  .map((value) => value.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
 if (!isProduction) {
@@ -55,7 +57,7 @@ app.use(
         return callback(null, true);
       }
 
-      const normalizedOrigin = origin.replace(/\/$/, "");
+      const normalizedOrigin = origin.replace(/\/+$/, "");
 
       if (configuredOrigins.includes(normalizedOrigin)) {
         return callback(null, true);
@@ -96,18 +98,21 @@ app.use(cookieParser());
 if (!isProduction) {
   app.use("/api/v1/auth", (req, _res, next) => {
     if (req.method === "POST") {
-      logger.info({
-        path: req.path,
-        contentType: req.headers["content-type"],
-        contentLength: req.headers["content-length"],
-        bodyExists: req.body !== undefined && req.body !== null,
-        bodyKeys:
-          req.body &&
-          typeof req.body === "object" &&
-          !Array.isArray(req.body)
-            ? Object.keys(req.body)
-            : [],
-      }, "Auth request debug");
+      logger.info(
+        {
+          path: req.path,
+          contentType: req.headers["content-type"],
+          contentLength: req.headers["content-length"],
+          bodyExists: req.body !== undefined && req.body !== null,
+          bodyKeys:
+            req.body &&
+            typeof req.body === "object" &&
+            !Array.isArray(req.body)
+              ? Object.keys(req.body)
+              : [],
+        },
+        "Auth request debug"
+      );
     }
 
     next();
