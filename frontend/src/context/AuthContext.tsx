@@ -7,7 +7,6 @@ import {
   useState,
   useEffect,
   useCallback,
-  useRef,
   type ReactNode,
 } from "react";
 
@@ -161,9 +160,6 @@ export function AuthProvider({
   const [error, setError] =
     useState<string | null>(null);
 
-  const initialCheckStarted =
-    useRef(false);
-
   const isAuthenticated =
     user !== null;
 
@@ -219,11 +215,7 @@ export function AuthProvider({
   // Initial session check
   // ==================================
 
-   useEffect(() => {
-    if (initialCheckStarted.current) return;
-
-    initialCheckStarted.current = true;
-
+  useEffect(() => {
     const path = window.location.pathname;
 
     const isPublicPage =
@@ -234,15 +226,19 @@ export function AuthProvider({
       path === "/tools" ||
       path.startsWith("/tools/");
 
-    if (isPublicPage) {
-      queueMicrotask(() => {
+    const timer = window.setTimeout(() => {
+      if (isPublicPage) {
         setLoading(false);
-      });
-      return;
-    }
+      } else {
+        void checkAuth();
+      }
+    }, 0);
 
-    void checkAuth();
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [checkAuth]);
+
   // ==================================
   // ADMIN ROUTE PROTECTION
   // ==================================
@@ -347,27 +343,29 @@ export function AuthProvider({
         );
       }
 
-      const response = await API.post<AuthApiResponse>(
-        "/auth/register",
-        {
-          name: fullName.trim(),
-          email: email.trim().toLowerCase(),
-          password,
-          consents: {
-            essentialCookies: true,
-            termsAndPrivacyAccepted:
-              consents.termsAndPrivacyAccepted,
-            analyticsConsent:
-              consents.analyticsConsent,
-            marketingConsent:
-              consents.marketingConsent,
-          },
-        }
-      );
+      const response =
+        await API.post<AuthApiResponse>(
+          "/auth/register",
+          {
+            name: fullName.trim(),
+            email: email.trim().toLowerCase(),
+            password,
+            consents: {
+              essentialCookies: true,
+              termsAndPrivacyAccepted:
+                consents.termsAndPrivacyAccepted,
+              analyticsConsent:
+                consents.analyticsConsent,
+              marketingConsent:
+                consents.marketingConsent,
+            },
+          }
+        );
 
       if (response.data.success === false) {
         throw new Error(
-          response.data.message || "Registration failed."
+          response.data.message ||
+            "Registration failed."
         );
       }
 
