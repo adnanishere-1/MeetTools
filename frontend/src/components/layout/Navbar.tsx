@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -10,7 +9,7 @@ import {
   CrownIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
-import axios from "axios";
+import API from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Navbar() {
@@ -27,17 +26,17 @@ export default function Navbar() {
     setLoggingOut(true);
 
     try {
-      await axios.post(
-        "/api/v1/auth/logout",
+      await API.post(
+        "/auth/logout",
         {},
         {
           withCredentials: true,
         }
       );
 
-      setUser(null);
       window.location.replace("/");
     } catch (error) {
+      console.error("Logout failed:", error);
       alert("Logout failed. Please try again.");
       setLoggingOut(false);
     }
@@ -91,21 +90,13 @@ export default function Navbar() {
                 x2="100%"
                 y2="100%"
               >
-                <stop
-                  offset="0%"
-                  stopColor="#FB8500"
-                />
-
+                <stop offset="0%" stopColor="#FB8500" />
                 <stop
                   offset="50%"
                   stopColor="#FFB703"
                   stopOpacity="0.2"
                 />
-
-                <stop
-                  offset="100%"
-                  stopColor="#FB8500"
-                />
+                <stop offset="100%" stopColor="#FB8500" />
               </linearGradient>
 
               <filter
@@ -122,7 +113,6 @@ export default function Navbar() {
                   floodColor="#121212"
                   floodOpacity="0.3"
                 />
-
                 <feDropShadow
                   dx="0"
                   dy="2"
@@ -186,9 +176,7 @@ export default function Navbar() {
               letterSpacing="-0.7"
             >
               Meet
-              <tspan fill="#FB8500">
-                Tools
-              </tspan>
+              <tspan fill="#FB8500">Tools</tspan>
             </text>
           </svg>
         </Link>
@@ -201,10 +189,7 @@ export default function Navbar() {
                 href="/admin/dashboard"
                 className="text-sm font-bold text-[#fb8500] flex items-center gap-1.5"
               >
-                <CrownIcon
-                  size={18}
-                  weight="fill"
-                />
+                <CrownIcon size={18} weight="fill" />
                 Admin Control Panel
               </Link>
             ) : (
@@ -247,9 +232,7 @@ export default function Navbar() {
                   weight="fill"
                 />
 
-                <span>
-                  {user.name || "Account"}
-                </span>
+                <span>{user.name || "Account"}</span>
 
                 {isAdmin && (
                   <span className="px-2 py-0.5 bg-[#fb8500]/10 text-[#fb8500] border border-[#fb8500]/30 rounded-full text-[10px] uppercase font-black">
@@ -265,9 +248,7 @@ export default function Navbar() {
               >
                 <SignOutIcon size={16} />
 
-                {loggingOut
-                  ? "Logging out..."
-                  : "Logout"}
+                {loggingOut ? "Logging out..." : "Logout"}
               </button>
             </div>
           ) : !loading && (
@@ -292,9 +273,7 @@ export default function Navbar() {
         {/* Mobile Menu Button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          aria-label={
-            isOpen ? "Close menu" : "Open menu"
-          }
+          aria-label={isOpen ? "Close menu" : "Open menu"}
           className="md:hidden p-2 text-[#333333] focus:outline-none cursor-pointer"
         >
           {isOpen ? (
@@ -315,10 +294,7 @@ export default function Navbar() {
                 onClick={() => setIsOpen(false)}
                 className="text-base font-bold text-[#fb8500] flex items-center gap-2"
               >
-                <CrownIcon
-                  size={18}
-                  weight="fill"
-                />
+                <CrownIcon size={18} weight="fill" />
                 Admin Control Panel
               </Link>
             ) : (
@@ -359,9 +335,7 @@ export default function Navbar() {
                 disabled={loggingOut}
                 className="text-center py-2.5 text-sm font-bold text-red-500 bg-red-50 rounded-xl border border-red-200"
               >
-                {loggingOut
-                  ? "Logging out..."
-                  : "Logout"}
+                {loggingOut ? "Logging out..." : "Logout"}
               </button>
             ) : !loading && (
               <>
@@ -388,7 +362,3 @@ export default function Navbar() {
     </nav>
   );
 }
-function setUser(arg0: null) {
-  throw new Error("Function not implemented.");
-}
-
