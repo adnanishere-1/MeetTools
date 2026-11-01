@@ -1,13 +1,5 @@
 
-import nodemailer, {
-  type Transporter,
-} from "nodemailer";
-
 import { logger } from "./logger.js";
-
-// =====================================
-// Types
-// =====================================
 
 interface SendEmailOptions {
   to: string;
@@ -15,126 +7,27 @@ interface SendEmailOptions {
   html: string;
 }
 
-// =====================================
-// SMTP Configuration
-// =====================================
-
-// Create the transporter once and reuse it.
-// Lazy initialization ensures environment
-// variables are read when first needed.
-
-let transporter: Transporter | null = null;
-
-function getRequiredEnv(
-  name: string
-): string {
-  const value = process.env[name]?.trim();
-
-  if (!value) {
-    throw new Error(
-      `${name} is missing in environment variables.`
-    );
-  }
-
-  return value;
+interface BrevoResponse {
+  messageId?: string;
+  code?: string;
+  message?: string;
 }
 
-function getEmailTransporter(): Transporter {
-  if (transporter) {
-    return transporter;
-  }
-
-  const emailUser = getRequiredEnv(
-    "EMAIL_USER"
-  );
-
-  const emailPass = getRequiredEnv(
-    "EMAIL_PASS"
-  );
-
-  transporter = nodemailer.createTransport({
-    service: "gmail",
-
-    auth: {
-      user: emailUser,
-      pass: emailPass,
-    },
-
-    // Avoid hanging indefinitely if SMTP
-    // server is slow or unreachable.
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 20000,
-  });
-
-  return transporter;
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li)>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
 }
-
-// =====================================
-// Validation Helpers
-// =====================================
-
-function validateEmailAddress(
-  email: string
-): string {
-  if (
-    typeof email !== "string" ||
-    !email.trim()
-  ) {
-    throw new Error(
-      "Recipient email address is required."
-    );
-  }
-
-  const normalizedEmail = email.trim();
-
-  // Basic format check.
-  // Full email validation should also happen
-  // in the request validation layer.
-  const emailPattern =
-    /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
-
-  if (
-    normalizedEmail.length > 254 ||
-    !emailPattern.test(normalizedEmail)
-  ) {
-    throw new Error(
-      "Invalid recipient email address."
-    );
-  }
-
-  return normalizedEmail;
-}
-
-function validateSubject(
-  subject: string
-): string {
-  if (
-    typeof subject !== "string" ||
-    !subject.trim()
-  ) {
-    throw new Error(
-      "Email subject is required."
-    );
-  }
-
-  const normalizedSubject = subject.trim();
-
-  if (
-    normalizedSubject.length > 200 ||
-    /[\r\n]/.test(normalizedSubject)
-  ) {
-    throw new Error(
-      "Invalid email subject."
-    );
-  }
-
-  return normalizedSubject;
-}
-
-// =====================================
-// Send Email
-// =====================================
 
 export async function sendEmail({
   to,
@@ -142,85 +35,58 @@ export async function sendEmail({
   html,
 }: SendEmailOptions): Promise<boolean> {
   try {
-    // Step 1: Validate input.
-    const recipient =
-      validateEmailAddress(to);
+    const apiKey = process.env.BREVO_API_KEY;
+    const senderEmail = process.env.EMAIL_FROM;
+    const senderName = process.env.EMAIL_FROM_NAME || "MeetTools";
 
-    const safeSubject =
-      validateSubject(subject);
-
-    if (
-      typeof html !== "string" ||
-      !html.trim()
-    ) {
-      throw new Error(
-        "Email HTML content is required."
+    if (!apiKey || !senderEmail) {
+      logger.error(
+        "Brevo configuration missing: BREVO_API_KEY or EMAIL_FROM"
       );
+      return false;
     }
 
-    // Step 2: Load SMTP configuration.
-    const emailUser = getRequiredEnv(
-      "EMAIL_USER"
-    );
-
-    const mailTransporter =
-      getEmailTransporter();
-
-    // Step 3: Send email.
-    const info = await mailTransporter.sendMail({
-      from: {
-        name: "MeetTools Support",
-        address: emailUser,
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
       },
-
-      to: recipient,
-      subject: safeSubject,
-      html,
-
-      // Avoid relying on HTML alone.
-      text: html
-        .replace(/<style[\s\S]*?<\/style>/gi, " ")
-        .replace(/<script[\s\S]*?<\/script>/gi, " ")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/gi, " ")
-        .replace(/&amp;/gi, "&")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/\s+/g, " ")
-        .trim(),
+      body: JSON.stringify({
+        sender: {
+          name: senderName,
+          email: senderEmail,
+        },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: htmlToText(html),
+      }),
     });
 
-    // Step 4: Verify SMTP accepted the recipient.
-    const accepted = (info.accepted ?? []).some(
-      (address) =>
-        address.toLowerCase() ===
-        recipient.toLowerCase()
-    );
+    const responseData = (await response.json().catch(() => ({}))) as BrevoResponse;
 
-    if (!accepted) {
-      throw new Error(
-        "SMTP server did not accept the recipient."
+    if (!response.ok) {
+      logger.error(
+        {
+          status: response.status,
+          code: responseData.code,
+          message: responseData.message,
+        },
+        "Brevo email sending failed"
       );
+      return false;
     }
 
-    // Do not log OTPs or email body.
     logger.info(
-      {
-        messageId: info.messageId,
-      },
-      "📧 MeetTools email accepted by SMTP server"
+      { messageId: responseData.messageId },
+      "MeetTools email sent successfully through Brevo"
     );
 
     return true;
-  } catch (error: unknown) {
-    logger.error(
-      {
-        err: error,
-      },
-      "❌ MeetTools email sending failed"
-    );
-
-    // Preserve the original error for debugging.
-    throw error;
+  } catch (error) {
+    logger.error({ err: error }, "Brevo email sending failed");
+    return false;
   }
 }
