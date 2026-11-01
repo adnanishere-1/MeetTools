@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -94,7 +93,7 @@ export default function DashboardPage() {
 
       try {
         const authResponse = await API.get<UserResponse>(
-          "/api/v1/users/me"
+          "/users/me"
         );
 
         if (cancelled) return;
@@ -103,9 +102,6 @@ export default function DashboardPage() {
           authResponse.data?.user ??
           authResponse.data?.data?.user;
 
-        // A successful /me response confirms authentication.
-        // If the API uses a different response envelope,
-        // authentication still comes from its HTTP status.
         setIsLoggedIn(true);
 
         if (user?.role === "admin") {
@@ -117,7 +113,7 @@ export default function DashboardPage() {
 
         try {
           const jobsResponse = await API.get<JobsResponse>(
-            "/api/v1/jobs"
+            "/jobs"
           );
 
           if (cancelled) return;
@@ -201,7 +197,7 @@ export default function DashboardPage() {
     setError(null);
 
     try {
-      await API.delete(`/api/v1/jobs/${id}`);
+      await API.delete(`/jobs/${id}`);
 
       setJobs((previousJobs) =>
         previousJobs.filter((job) => job._id !== id)
@@ -519,19 +515,19 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-1 shrink-0">
                           {/* Reuse Job */}
                           <button
-                              type="button"
-                              onClick={() =>
-                                handleReuseJob(job._id)
-                              }
-                              className="p-2 bg-[#fb8500]/10 text-[#fb8500] hover:bg-[#fb8500] hover:text-white rounded-xl transition-colors cursor-pointer"
-                              title="Resize / Use Again in Tool"
-                              aria-label={`Reuse ${fileName}`}
-                            >
-                              <ArrowsClockwiseIcon
-                                size={18}
-                                weight="bold"
-                              />
-                            </button>
+                            type="button"
+                            onClick={() =>
+                              handleReuseJob(job._id)
+                            }
+                            className="p-2 bg-[#fb8500]/10 text-[#fb8500] hover:bg-[#fb8500] hover:text-white rounded-xl transition-colors cursor-pointer"
+                            title="Resize / Use Again in Tool"
+                            aria-label={`Reuse ${fileName}`}
+                          >
+                            <ArrowsClockwiseIcon
+                              size={18}
+                              weight="bold"
+                            />
+                          </button>
 
                           {/* Download Output */}
                           {job.status === "completed" &&
