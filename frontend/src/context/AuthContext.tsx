@@ -177,7 +177,7 @@ export function AuthProvider({
       try {
         const response =
           await API.get<AuthApiResponse>(
-            "/api/v1/users/me"
+            "/users/me"
           );
 
         const currentUser =
@@ -251,7 +251,7 @@ export function AuthProvider({
     try {
       const response =
         await API.post<AuthApiResponse>(
-          "/api/v1/auth/login",
+          "/auth/login",
           {
             email:
               email.trim().toLowerCase(),
@@ -327,7 +327,7 @@ export function AuthProvider({
       }
 
       const response = await API.post<AuthApiResponse>(
-        "/api/v1/auth/register",
+        "/auth/register",
         {
           name: fullName.trim(),
           email:
@@ -388,7 +388,7 @@ export function AuthProvider({
     try {
       const response =
         await API.post<AuthApiResponse>(
-          "/api/v1/auth/verify-otp",
+          "/auth/verify-otp",
           {
             email:
               email.trim().toLowerCase(),
@@ -455,7 +455,7 @@ export function AuthProvider({
 
     try {
       const response = await API.post(
-        "/api/v1/auth/resend-otp",
+        "/auth/resend-otp",
         {
           email:
             email.trim().toLowerCase(),
@@ -496,7 +496,7 @@ export function AuthProvider({
 
       try {
         await API.post(
-          "/api/v1/auth/logout",
+          "/auth/logout",
           {}
         );
 
