@@ -219,7 +219,7 @@ export function AuthProvider({
   // Initial session check
   // ==================================
 
-  useEffect(() => {
+   useEffect(() => {
     if (initialCheckStarted.current) return;
 
     initialCheckStarted.current = true;
@@ -235,13 +235,14 @@ export function AuthProvider({
       path.startsWith("/tools/");
 
     if (isPublicPage) {
-      setLoading(false);
+      queueMicrotask(() => {
+        setLoading(false);
+      });
       return;
     }
 
     void checkAuth();
   }, [checkAuth]);
-
   // ==================================
   // ADMIN ROUTE PROTECTION
   // ==================================
