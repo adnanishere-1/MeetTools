@@ -1,4 +1,3 @@
-
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -324,11 +323,18 @@ export const register = asyncHandler(
       </div>
     `;
 
-    await sendEmail({
+    const emailSent = await sendEmail({
       to: user.email,
       subject: "Verify your MeetTools Account",
       html: emailHtml,
     });
+
+    if (!emailSent) {
+      throw new ApiError(
+        503,
+        "Your account was created, but verification email could not be sent. Please try resending the OTP."
+      );
+    }
 
     return res
       .status(STATUS_CODES.CREATED)
@@ -495,11 +501,18 @@ export const resendOTP = asyncHandler(
       </div>
     `;
 
-    await sendEmail({
+    const emailSent = await sendEmail({
       to: user.email,
       subject: "New MeetTools OTP",
       html: emailHtml,
     });
+
+    if (!emailSent) {
+      throw new ApiError(
+        503,
+        "OTP email could not be sent. Please try again."
+      );
+    }
 
     return res
       .status(STATUS_CODES.OK)
