@@ -1,19 +1,14 @@
 
-import "dotenv";
-config();
+import "dotenv/config";
 
 import ImageKit from "imagekit";
-
 import { logger } from "../utils/logger.js";
-import { config } from "dotenv";
 
 // =====================================
 // ImageKit Environment Configuration
 // =====================================
 
-function getRequiredEnv(
-  key: string
-): string {
+function getRequiredEnv(key: string): string {
   const value = process.env[key]?.trim();
 
   if (!value) {
@@ -25,17 +20,9 @@ function getRequiredEnv(
   return value;
 }
 
-const publicKey = getRequiredEnv(
-  "IMAGEKIT_PUBLIC_KEY"
-);
-
-const privateKey = getRequiredEnv(
-  "IMAGEKIT_PRIVATE_KEY"
-);
-
-const rawUrlEndpoint = getRequiredEnv(
-  "IMAGEKIT_URL_ENDPOINT"
-);
+const publicKey = getRequiredEnv("IMAGEKIT_PUBLIC_KEY");
+const privateKey = getRequiredEnv("IMAGEKIT_PRIVATE_KEY");
+const rawUrlEndpoint = getRequiredEnv("IMAGEKIT_URL_ENDPOINT");
 
 // Validate URL endpoint.
 let urlEndpoint: string;
@@ -44,9 +31,7 @@ try {
   const parsedUrl = new URL(rawUrlEndpoint);
 
   if (parsedUrl.protocol !== "https:") {
-    throw new Error(
-      "ImageKit URL endpoint must use HTTPS."
-    );
+    throw new Error("ImageKit URL endpoint must use HTTPS.");
   }
 
   urlEndpoint = rawUrlEndpoint.replace(/\/+$/, "");
@@ -67,16 +52,14 @@ export const imagekit = new ImageKit({
 });
 
 logger.info(
-  "✅ ImageKit configuration initialized successfully."
+  "ImageKit configuration initialized successfully."
 );
 
 // =====================================
 // Helper Functions
 // =====================================
 
-function getErrorMessage(
-  error: unknown
-): string {
+function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
@@ -84,16 +67,9 @@ function getErrorMessage(
   return String(error);
 }
 
-function validateFileName(
-  fileName: string
-): string {
-  if (
-    typeof fileName !== "string" ||
-    !fileName.trim()
-  ) {
-    throw new Error(
-      "A valid file name is required."
-    );
+function validateFileName(fileName: string): string {
+  if (typeof fileName !== "string" || !fileName.trim()) {
+    throw new Error("A valid file name is required.");
   }
 
   const normalizedFileName = fileName.trim();
@@ -105,30 +81,19 @@ function validateFileName(
     normalizedFileName.includes("\\") ||
     /[\x00-\x1F\x7F]/.test(normalizedFileName)
   ) {
-    throw new Error(
-      "File name contains invalid characters."
-    );
+    throw new Error("File name contains invalid characters.");
   }
 
   if (normalizedFileName.length > 255) {
-    throw new Error(
-      "File name is too long."
-    );
+    throw new Error("File name is too long.");
   }
 
   return normalizedFileName;
 }
 
-function validateFolder(
-  folder: string
-): string {
-  if (
-    typeof folder !== "string" ||
-    !folder.trim()
-  ) {
-    throw new Error(
-      "A valid ImageKit folder is required."
-    );
+function validateFolder(folder: string): string {
+  if (typeof folder !== "string" || !folder.trim()) {
+    throw new Error("A valid ImageKit folder is required.");
   }
 
   const normalizedFolder =
@@ -146,9 +111,7 @@ function validateFolder(
         /[\x00-\x1F\x7F\\]/.test(segment)
     )
   ) {
-    throw new Error(
-      "Invalid ImageKit folder path."
-    );
+    throw new Error("Invalid ImageKit folder path.");
   }
 
   return normalizedFolder;
@@ -163,38 +126,29 @@ export async function uploadToImageKit(
   fileName: string,
   folder: string = "/meettools/uploads"
 ) {
-  // Validate input buffer.
-  if (
-    !Buffer.isBuffer(fileBuffer) ||
-    fileBuffer.length === 0
-  ) {
+  if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
     throw new Error(
       "Cannot upload an empty or invalid file buffer."
     );
   }
 
-  const safeFileName =
-    validateFileName(fileName);
-
-  const safeFolder =
-    validateFolder(folder);
+  const safeFileName = validateFileName(fileName);
+  const safeFolder = validateFolder(folder);
 
   try {
     logger.info(
-      `📤 Uploading file to ImageKit: ${safeFileName}`
+      `Uploading file to ImageKit: ${safeFileName}`
     );
 
     const response = await imagekit.upload({
       file: fileBuffer,
       fileName: safeFileName,
       folder: safeFolder,
-
-      // Generate unique names to prevent overwriting.
       useUniqueFileName: true,
     });
 
     logger.info(
-      `✅ File uploaded successfully to ImageKit: ${response.fileId}`
+      `File uploaded successfully to ImageKit: ${response.fileId}`
     );
 
     return response;
@@ -204,7 +158,7 @@ export async function uploadToImageKit(
         err: error,
         fileName: safeFileName,
       },
-      "❌ ImageKit upload failed"
+      "ImageKit upload failed"
     );
 
     throw new Error(
@@ -220,24 +174,17 @@ export async function uploadToImageKit(
 export async function deleteFromImageKit(
   fileId: string
 ): Promise<void> {
-  if (
-    typeof fileId !== "string" ||
-    !fileId.trim()
-  ) {
-    throw new Error(
-      "A valid ImageKit file ID is required."
-    );
+  if (typeof fileId !== "string" || !fileId.trim()) {
+    throw new Error("A valid ImageKit file ID is required.");
   }
 
   const normalizedFileId = fileId.trim();
 
   try {
-    await imagekit.deleteFile(
-      normalizedFileId
-    );
+    await imagekit.deleteFile(normalizedFileId);
 
     logger.info(
-      `🗑️ Successfully deleted ImageKit file: ${normalizedFileId}`
+      `Successfully deleted ImageKit file: ${normalizedFileId}`
     );
   } catch (error: unknown) {
     logger.error(
@@ -245,7 +192,7 @@ export async function deleteFromImageKit(
         err: error,
         fileId: normalizedFileId,
       },
-      "❌ ImageKit file deletion failed"
+      "ImageKit file deletion failed"
     );
 
     throw new Error(
