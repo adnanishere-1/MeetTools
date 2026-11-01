@@ -7,7 +7,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { STATUS_CODES } from "../utils/statusCodes.js";
 
-import { imageQueue } from "../queues/imageQueue.js";
+import { resizeQueue } from "../queues/imageQueue.js";
+import { redis } from "../config/redis.js";
 import { Job } from "../models/Job.model.js";
 
 import type {
@@ -24,8 +25,7 @@ const getUserId = (
   const rawUserId =
     req.user?.id ?? req.user?._id;
 
-  const userId =
-    rawUserId?.toString();
+  const userId = rawUserId?.toString();
 
   if (
     !userId ||
@@ -44,15 +44,9 @@ const getObjectIdParam = (
   value: string | string[] | undefined,
   name: string
 ): string => {
-  const id =
-    Array.isArray(value)
-      ? value[0]
-      : value;
+  const id = Array.isArray(value) ? value[0] : value;
 
-  if (
-    !id ||
-    !mongoose.isValidObjectId(id)
-  ) {
+  if (!id || !mongoose.isValidObjectId(id)) {
     throw new ApiError(
       STATUS_CODES.BAD_REQUEST,
       `Invalid ${name}`
@@ -104,6 +98,9 @@ const validStatuses = new Set([
   "failed",
 ]);
 
+const getCancellationKey = (jobId: string) =>
+  `meetools:cancel-resize:${jobId}`;
+
 // =====================================
 // Get User Jobs
 // GET /api/v1/jobs
@@ -116,17 +113,8 @@ export const getUserJobs = asyncHandler(
   ) => {
     const userId = getUserId(req);
 
-    const page = parsePagination(
-      req.query.page,
-      1,
-      1000000
-    );
-
-    const limit = parsePagination(
-      req.query.limit,
-      10,
-      100
-    );
+    const page = parsePagination(req.query.page, 1, 1000000);
+    const limit = parsePagination(req.query.limit, 10, 100);
 
     const status = req.query.status;
 
@@ -146,9 +134,7 @@ export const getUserJobs = asyncHandler(
     const query: {
       userId: string;
       status?: "pending" | "processing" | "completed" | "failed";
-    } = {
-      userId,
-    };
+    } = { userId };
 
     if (typeof status === "string") {
       query.status = status as
@@ -160,33 +146,25 @@ export const getUserJobs = asyncHandler(
 
     const skip = (page - 1) * limit;
 
-    const [jobs, totalJobs] =
-      await Promise.all([
-        Job.find(query)
-          .sort({
-            createdAt: -1,
-            _id: -1,
-          })
-          .skip(skip)
-          .limit(limit)
-          .lean(),
+    const [jobs, totalJobs] = await Promise.all([
+      Job.find(query)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
 
-        Job.countDocuments(query),
-      ]);
+      Job.countDocuments(query),
+    ]);
 
-    return res
-      .status(STATUS_CODES.OK)
-      .json({
-        success: true,
-        count: jobs.length,
-        total: totalJobs,
-        currentPage: page,
-        totalPages:
-          Math.ceil(totalJobs / limit),
-        jobs,
-        message:
-          "User jobs history retrieved successfully from database",
-      });
+    return res.status(STATUS_CODES.OK).json({
+      success: true,
+      count: jobs.length,
+      total: totalJobs,
+      currentPage: page,
+      totalPages: Math.ceil(totalJobs / limit),
+      jobs,
+      message: "User jobs history retrieved successfully from database",
+    });
   }
 );
 
@@ -219,15 +197,12 @@ export const getJobById = asyncHandler(
       );
     }
 
-    // Preserve existing response format.
-    return res
-      .status(STATUS_CODES.OK)
-      .json(job);
+    return res.status(STATUS_CODES.OK).json(job);
   }
 );
 
 // =====================================
-// Delete Job
+// Delete / Cancel Job
 // DELETE /api/v1/jobs/:id
 // =====================================
 
@@ -243,54 +218,117 @@ export const deleteJob = asyncHandler(
       "job ID"
     );
 
-    // Prevent deletion of an active job.
-    // Deleting a MongoDB record does not
-    // automatically stop a BullMQ worker.
-    const job =
-      await Job.findOneAndDelete({
-        _id: id,
-        userId,
-        status: {
-          $in: [
-            "completed",
-            "failed",
-          ],
-        },
-      });
+    // Verify ownership in MongoDB first.
+    const dbJob = await Job.findOne({
+      _id: id,
+      userId,
+    });
 
-    if (!job) {
-      const existing =
-        await Job.exists({
-          _id: id,
-          userId,
-        });
-
-      if (existing) {
-        throw new ApiError(
-          STATUS_CODES.CONFLICT,
-          "Active jobs cannot be deleted until processing finishes"
-        );
-      }
-
+    if (!dbJob) {
       throw new ApiError(
         STATUS_CODES.NOT_FOUND,
         "Job not found or unauthorized"
       );
     }
 
-    return res
-      .status(STATUS_CODES.OK)
-      .json({
-        success: true,
-        message:
-          "Job deleted successfully from database",
+    const queueJob = await resizeQueue.getJob(id);
+
+    // If the BullMQ job has already expired,
+    // delete only a terminal MongoDB record.
+    if (!queueJob) {
+      if (
+        dbJob.status === "pending" ||
+        dbJob.status === "processing"
+      ) {
+        throw new ApiError(
+          STATUS_CODES.CONFLICT,
+          "Job is active but its queue record is missing. Please try again later."
+        );
+      }
+
+      await Job.deleteOne({
+        _id: id,
+        userId,
       });
+
+      return res.status(STATUS_CODES.OK).json({
+        success: true,
+        message: "Job deleted successfully",
+      });
+    }
+
+    const state = await queueJob.getState();
+
+    // Active jobs cannot be force-removed safely.
+    // Ask the worker to stop at its next checkpoint.
+    if (state === "active") {
+      await redis.set(
+        getCancellationKey(id),
+        "1",
+        "EX",
+        60 * 60
+      );
+
+      return res.status(STATUS_CODES.ACCEPTED).json({
+        success: true,
+        cancellationRequested: true,
+        message:
+          "Job cancellation requested. It will stop at the next worker checkpoint. Delete it again after cancellation finishes.",
+      });
+    }
+
+    // Waiting/delayed jobs can be removed immediately.
+    if (
+      state === "waiting" ||
+      state === "delayed" ||
+      state === "prioritized" ||
+      state === "waiting-children"
+    ) {
+      await queueJob.remove();
+
+      await Job.deleteOne({
+        _id: id,
+        userId,
+      });
+
+      await redis.del(getCancellationKey(id));
+
+      return res.status(STATUS_CODES.OK).json({
+        success: true,
+        message: "Queued job deleted successfully",
+      });
+    }
+
+    // Completed/failed jobs are safe to remove.
+    if (
+      state === "completed" ||
+      state === "failed"
+    ) {
+      await queueJob.remove();
+
+      await Job.deleteOne({
+        _id: id,
+        userId,
+      });
+
+      await redis.del(getCancellationKey(id));
+
+      return res.status(STATUS_CODES.OK).json({
+        success: true,
+        message: "Job deleted successfully",
+      });
+    }
+
+    throw new ApiError(
+      STATUS_CODES.CONFLICT,
+      `Job cannot be deleted in its current queue state: ${state}`
+    );
   }
 );
 
 // =====================================
 // Get Queue Job Status
-// Existing controller export preserved
+// GET /api/v1/jobs/:jobId/status
 // =====================================
 
 export const getJobStatus = asyncHandler(
@@ -305,8 +343,6 @@ export const getJobStatus = asyncHandler(
       "job ID"
     );
 
-    // Verify ownership before accessing
-    // BullMQ job details.
     const ownedJob = await Job.exists({
       _id: jobId,
       userId,
@@ -319,8 +355,7 @@ export const getJobStatus = asyncHandler(
       );
     }
 
-    const job =
-      await imageQueue.getJob(jobId);
+    const job = await resizeQueue.getJob(jobId);
 
     if (!job) {
       throw new ApiError(
@@ -331,17 +366,13 @@ export const getJobStatus = asyncHandler(
 
     const state = await job.getState();
 
-    return res
-      .status(STATUS_CODES.OK)
-      .json({
-        success: true,
-        jobId: job.id,
-        state,
-        progress: job.progress,
-        failedReason:
-          job.failedReason || null,
-        returnvalue:
-          job.returnvalue || null,
-      });
+    return res.status(STATUS_CODES.OK).json({
+      success: true,
+      jobId: job.id,
+      state,
+      progress: job.progress,
+      failedReason: job.failedReason || null,
+      returnvalue: job.returnvalue || null,
+    });
   }
 );

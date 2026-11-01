@@ -1,4 +1,3 @@
-
 import "dotenv/config";
 
 import mongoose from "mongoose";
@@ -7,11 +6,15 @@ import IORedis from "ioredis";
 
 import {
   Worker,
+  UnrecoverableError,
   type Job,
 } from "bullmq";
 
 import { imagekit } from "../config/imagekit.js";
-import { redisConnectionOptions } from "../config/redis.js";
+import {
+  redis,
+  redisConnectionOptions,
+} from "../config/redis.js";
 import { logger } from "../utils/logger.js";
 import { ActivityLog } from "../models/ActivityLog.model.js";
 import { Job as DatabaseJob } from "../models/Job.model.js";
@@ -56,6 +59,29 @@ type ImageKitTransformation = {
   format?: string;
   effectSharpen?: string;
 };
+
+// =====================================
+// Job Cancellation Helper
+// =====================================
+
+async function checkJobCancellation(
+  jobId: string | undefined
+): Promise<void> {
+  if (!jobId) {
+    return;
+  }
+
+  const cancellationKey =
+    `meetools:cancel-resize:${jobId}`;
+
+  const cancelled = await redis.get(cancellationKey);
+
+  if (cancelled === "1") {
+    throw new UnrecoverableError(
+      "JOB_CANCELLED: Job cancelled by user"
+    );
+  }
+}
 
 // =====================================
 // MongoDB Connection For Activity Logs
@@ -304,6 +330,9 @@ const processResizeJob = async (
       },
     });
 
+    // Check cancellation before processing.
+    await checkJobCancellation(job.id);
+
     validateSourceUrl(fileUrl);
 
     await job.updateProgress(20);
@@ -311,6 +340,8 @@ const processResizeJob = async (
     await updateDatabaseJob(dbJobId, {
       $set: { progress: 20 },
     });
+
+    await checkJobCancellation(job.id);
 
     const width = validateInteger(
       transformations?.width,
@@ -359,6 +390,8 @@ const processResizeJob = async (
       $set: { progress: 40 },
     });
 
+    await checkJobCancellation(job.id);
+
     const transformation: ImageKitTransformation[] = [];
 
     if (width !== null || height !== null) {
@@ -391,6 +424,8 @@ const processResizeJob = async (
       $set: { progress: 60 },
     });
 
+    await checkJobCancellation(job.id);
+
     const resizedUrl = imagekit.url({
       src: fileUrl,
       transformation,
@@ -401,6 +436,8 @@ const processResizeJob = async (
     await updateDatabaseJob(dbJobId, {
       $set: { progress: 80 },
     });
+
+    await checkJobCancellation(job.id);
 
     const result: ResizeJobResult = {
       success: true,
@@ -418,6 +455,9 @@ const processResizeJob = async (
       width,
       height,
     };
+
+    // Final cancellation check before completion.
+    await checkJobCancellation(job.id);
 
     // Save completed status and output in MongoDB.
     await updateDatabaseJob(dbJobId, {
@@ -518,6 +558,9 @@ resizeWorker.on("failed", async (job, error) => {
 
   // Wait until all BullMQ retries are exhausted.
   if (job.attemptsMade >= maxAttempts) {
+    const isCancelled =
+      error.message.includes("JOB_CANCELLED:");
+
     try {
       await updateDatabaseJob(
         job.data.dbJobId,
@@ -525,14 +568,23 @@ resizeWorker.on("failed", async (job, error) => {
           $set: {
             status: "failed",
             error: {
-              message:
-                error.message ||
-                "Image processing failed",
-              code: "IMAGE_PROCESSING_FAILED",
+              message: isCancelled
+                ? "Job cancelled by user"
+                : error.message ||
+                  "Image processing failed",
+              code: isCancelled
+                ? "JOB_CANCELLED"
+                : "IMAGE_PROCESSING_FAILED",
             },
           },
         }
       );
+
+      if (isCancelled && job.id) {
+        await redis.del(
+          `meetools:cancel-resize:${job.id}`
+        );
+      }
     } catch (dbError) {
       logger.error(
         {
