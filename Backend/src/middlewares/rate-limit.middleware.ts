@@ -1,65 +1,76 @@
 
 import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+
+import { redis } from "../config/redis.js";
 
 // =====================================
-// Configuration
+// Shared Redis Store
 // =====================================
 
-const FIFTEEN_MINUTES = 15 * 60 * 1000;
+const createRedisStore = (prefix: string) =>
+  new RedisStore({
+    sendCommand: (...args: string[]) =>
+      redis.call(args[0]!, args.slice(1)) as Promise<number>,
+    prefix,
+  });
 
 // =====================================
-// Standard API Rate Limiter
+// General API Limiter
 // =====================================
 
-/**
- * Maximum 100 requests per 15 minutes
- * per client IP.
- *
- * Suitable for general API endpoints.
- */
 export const apiLimiter = rateLimit({
-  windowMs: FIFTEEN_MINUTES,
-
+  windowMs: 15 * 60 * 1000,
   limit: 100,
 
   standardHeaders: "draft-7",
   legacyHeaders: false,
 
+  store: createRedisStore("rate-limit:api:"),
+
   message: {
     success: false,
     message:
-      "Too many requests from this IP, please try again after 15 minutes.",
+      "Too many requests. Please try again after 15 minutes.",
   },
 
-  // Do not count CORS preflight requests.
   skip: (req) => req.method === "OPTIONS",
+
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      message:
+        "Too many requests. Please try again after 15 minutes.",
+    });
+  },
 });
 
 // =====================================
-// Authentication Rate Limiter
+// Authentication Limiter
 // =====================================
 
-/**
- * Maximum 5 authentication requests
- * per 15 minutes per client IP.
- *
- * Apply to sensitive authentication
- * endpoints rather than the entire
- * auth router.
- */
 export const authLimiter = rateLimit({
-  windowMs: FIFTEEN_MINUTES,
-
+  windowMs: 15 * 60 * 1000,
   limit: 5,
 
   standardHeaders: "draft-7",
   legacyHeaders: false,
 
+  store: createRedisStore("rate-limit:auth:"),
+
   message: {
     success: false,
     message:
-      "Too many authentication attempts, please try again after 15 minutes.",
+      "Too many authentication attempts. Please try again after 15 minutes.",
   },
 
   skip: (req) => req.method === "OPTIONS",
+
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      message:
+        "Too many authentication attempts. Please try again after 15 minutes.",
+    });
+  },
 });

@@ -26,15 +26,13 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 // =====================================
-// Multer Storage
+// Storage
 // =====================================
 
-// Uploaded images remain in memory.
-// No temporary files are written to disk.
 const storage = multer.memoryStorage();
 
 // =====================================
-// Initial MIME Type Filter
+// MIME Filter
 // =====================================
 
 const fileFilter: multer.Options["fileFilter"] = (
@@ -49,7 +47,6 @@ const fileFilter: multer.Options["fileFilter"] = (
         "Unsupported image format. Only JPEG, PNG, WebP, AVIF and GIF are allowed."
       )
     );
-
     return;
   }
 
@@ -57,7 +54,7 @@ const fileFilter: multer.Options["fileFilter"] = (
 };
 
 // =====================================
-// Multer Upload Configuration
+// Upload Configuration
 // =====================================
 
 export const upload = multer({
@@ -65,17 +62,12 @@ export const upload = multer({
 
   limits: {
     fileSize: MAX_FILE_SIZE,
-
-    // Maximum one file per request
-    // for upload.single("image").
     files: 1,
-
-    // Protect multipart parser from
-    // excessive field counts.
     fields: 20,
-
-    // Restrict multipart field name size.
     fieldNameSize: 100,
+    fieldSize: 64 * 1024,
+    parts: 21,
+    headerPairs: 100,
   },
 
   fileFilter,
@@ -100,11 +92,7 @@ function getUploadedFiles(
     req.files &&
     typeof req.files === "object"
   ) {
-    for (
-      const fileGroup of Object.values(
-        req.files
-      )
-    ) {
+    for (const fileGroup of Object.values(req.files)) {
       files.push(...fileGroup);
     }
   }
@@ -113,21 +101,9 @@ function getUploadedFiles(
 }
 
 // =====================================
-// Verify Actual Image File Content
+// Verify Actual Image Content
 // =====================================
 
-/**
- * Verify uploaded image signatures.
- *
- * Must run AFTER Multer:
- *
- * upload.single("image"),
- * verifyRealImage
- *
- * This validates file signatures but
- * does not fully decode or sanitize
- * image contents.
- */
 export const verifyRealImage = async (
   req: Request,
   _res: Response,
@@ -136,11 +112,16 @@ export const verifyRealImage = async (
   try {
     const files = getUploadedFiles(req);
 
-    // Let route/controller decide whether
-    // an uploaded file is required.
     if (files.length === 0) {
       next();
       return;
+    }
+
+    if (files.length > 1) {
+      throw new ApiError(
+        STATUS_CODES.BAD_REQUEST,
+        "Only one image is allowed per request."
+      );
     }
 
     for (const file of files) {
@@ -154,16 +135,20 @@ export const verifyRealImage = async (
         );
       }
 
-      const detectedType =
-        await fileTypeFromBuffer(
-          file.buffer
+      if (file.size > MAX_FILE_SIZE) {
+        throw new ApiError(
+          STATUS_CODES.PAYLOAD_TOO_LARGE,
+          "Image size must not exceed 10 MB."
         );
+      }
+
+      const detectedType = await fileTypeFromBuffer(
+        file.buffer
+      );
 
       if (
         !detectedType ||
-        !ALLOWED_MIME_TYPES.has(
-          detectedType.mime
-        )
+        !ALLOWED_MIME_TYPES.has(detectedType.mime)
       ) {
         throw new ApiError(
           STATUS_CODES.UNSUPPORTED_MEDIA_TYPE,
@@ -171,25 +156,10 @@ export const verifyRealImage = async (
         );
       }
 
-      // Declared MIME type must match
-      // the detected binary signature.
-      if (
-        file.mimetype !== detectedType.mime
-      ) {
+      if (file.mimetype !== detectedType.mime) {
         throw new ApiError(
           STATUS_CODES.BAD_REQUEST,
           "Image MIME type does not match its file content."
-        );
-      }
-
-      // Reject files exceeding the
-      // configured size limit.
-      if (
-        file.size > MAX_FILE_SIZE
-      ) {
-        throw new ApiError(
-          STATUS_CODES.PAYLOAD_TOO_LARGE,
-          "Image size must not exceed 10 MB."
         );
       }
     }

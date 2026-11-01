@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -11,6 +12,7 @@ import {
 } from "react";
 
 import axios from "axios";
+import { usePathname } from "next/navigation";
 import API from "@/lib/api";
 
 export type UserRole = "user" | "admin";
@@ -77,7 +79,6 @@ interface AuthContextType {
 
   checkAuth: () => Promise<AuthUser | null>;
 
-  // Compatibility with existing components
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -149,6 +150,8 @@ export function AuthProvider({
 }: {
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+
   const [user, setUser] =
     useState<AuthUser | null>(null);
 
@@ -163,6 +166,10 @@ export function AuthProvider({
 
   const isAuthenticated =
     user !== null;
+
+  const isAdminRoute =
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/");
 
   // ==================================
   // Restore session
@@ -208,13 +215,17 @@ export function AuthProvider({
       }
     }, []);
 
+  // ==================================
+  // Initial session check
+  // ==================================
+
   useEffect(() => {
     if (initialCheckStarted.current) return;
+
     initialCheckStarted.current = true;
 
-    // Public pages support guest use and do not need an initial
-    // protected /users/me request.
     const path = window.location.pathname;
+
     const isPublicPage =
       path === "/" ||
       path === "/login" ||
@@ -224,18 +235,31 @@ export function AuthProvider({
       path.startsWith("/tools/");
 
     if (isPublicPage) {
-      queueMicrotask(() => {
-        setLoading(false);
-      });
+      setLoading(false);
       return;
     }
 
-    queueMicrotask(() => {
-      if (initialCheckStarted.current) {
-        void checkAuth();
-      }
-    });
+    void checkAuth();
   }, [checkAuth]);
+
+  // ==================================
+  // ADMIN ROUTE PROTECTION
+  // ==================================
+
+  useEffect(() => {
+    if (!isAdminRoute || loading) return;
+
+    // Guest users cannot access admin pages.
+    if (!user) {
+      window.location.replace("/login");
+      return;
+    }
+
+    // Normal users cannot access admin pages.
+    if (user.role !== "admin") {
+      window.location.replace("/dashboard");
+    }
+  }, [isAdminRoute, loading, user]);
 
   // ==================================
   // Login
@@ -253,8 +277,7 @@ export function AuthProvider({
         await API.post<AuthApiResponse>(
           "/auth/login",
           {
-            email:
-              email.trim().toLowerCase(),
+            email: email.trim().toLowerCase(),
             password,
           }
         );
@@ -278,15 +301,12 @@ export function AuthProvider({
       setUser(loggedInUser);
 
       window.location.replace(
-        getDashboardPath(
-          loggedInUser.role
-        )
+        getDashboardPath(loggedInUser.role)
       );
 
       return {
         success: true,
-        message:
-          response.data.message,
+        message: response.data.message,
       };
     } catch (err: unknown) {
       const message = getErrorMessage(
@@ -330,10 +350,8 @@ export function AuthProvider({
         "/auth/register",
         {
           name: fullName.trim(),
-          email:
-            email.trim().toLowerCase(),
+          email: email.trim().toLowerCase(),
           password,
-
           consents: {
             essentialCookies: true,
             termsAndPrivacyAccepted:
@@ -390,8 +408,7 @@ export function AuthProvider({
         await API.post<AuthApiResponse>(
           "/auth/verify-otp",
           {
-            email:
-              email.trim().toLowerCase(),
+            email: email.trim().toLowerCase(),
             otp: otp.trim(),
           }
         );
@@ -403,21 +420,14 @@ export function AuthProvider({
         );
       }
 
-      // Check whether verification also
-      // established an authenticated session.
-      const currentUser =
-        await checkAuth();
+      const currentUser = await checkAuth();
 
       if (currentUser) {
         window.location.replace(
-          getDashboardPath(
-            currentUser.role
-          )
+          getDashboardPath(currentUser.role)
         );
       } else {
-        window.location.replace(
-          "/login"
-        );
+        window.location.replace("/login");
       }
 
       return {
@@ -457,8 +467,7 @@ export function AuthProvider({
       const response = await API.post(
         "/auth/resend-otp",
         {
-          email:
-            email.trim().toLowerCase(),
+          email: email.trim().toLowerCase(),
         }
       );
 
@@ -502,9 +511,7 @@ export function AuthProvider({
 
         setUser(null);
 
-        window.location.replace(
-          "/login"
-        );
+        window.location.replace("/login");
       } catch (err: unknown) {
         const message = getErrorMessage(
           err,
@@ -522,10 +529,23 @@ export function AuthProvider({
       }
     }, []);
 
+  // ==================================
+  // Refresh User
+  // ==================================
+
   const refreshUser =
     useCallback(async (): Promise<void> => {
       await checkAuth();
     }, [checkAuth]);
+
+  // ==================================
+  // Prevent admin page content
+  // from rendering before verification
+  // ==================================
+
+  const canRenderAdminRoute =
+    !isAdminRoute ||
+    (!loading && user?.role === "admin");
 
   return (
     <AuthContext.Provider
@@ -544,7 +564,15 @@ export function AuthProvider({
         logout: logoutUser,
       }}
     >
-      {children}
+      {canRenderAdminRoute ? (
+        children
+      ) : (
+        isAdminRoute && (
+          <div className="min-h-screen flex items-center justify-center">
+            <p>Verifying access...</p>
+          </div>
+        )
+      )}
     </AuthContext.Provider>
   );
 }

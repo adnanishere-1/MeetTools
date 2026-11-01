@@ -28,7 +28,8 @@ export interface IJobOptions {
 }
 
 export interface IJob extends Document {
-  userId: mongoose.Types.ObjectId;
+  userId?: mongoose.Types.ObjectId;
+  guestId?: string;
   status:
     | "pending"
     | "processing"
@@ -58,38 +59,31 @@ const fileSubSchema = new Schema<IImageFile>(
       required: true,
       trim: true,
     },
-
     url: {
       type: String,
       required: true,
       trim: true,
     },
-
     fileName: {
       type: String,
       required: true,
       trim: true,
     },
-
     fileSize: {
       type: Number,
       required: true,
       min: 0,
     },
-
     width: {
       type: Number,
       min: 1,
     },
-
     height: {
       type: Number,
       min: 1,
     },
   },
-  {
-    _id: false,
-  }
+  { _id: false }
 );
 
 // =====================================
@@ -100,58 +94,40 @@ const jobOptionsSchema = new Schema<IJobOptions>(
   {
     mode: {
       type: String,
-      enum: [
-        "exact",
-        "fit",
-        "percentage",
-        "preset",
-      ],
+      enum: ["exact", "fit", "percentage", "preset"],
       required: true,
     },
-
     width: {
       type: Number,
       min: 1,
     },
-
     height: {
       type: Number,
       min: 1,
     },
-
     percentage: {
       type: Number,
       min: 1,
       max: 500,
     },
-
     outputFormat: {
       type: String,
-      enum: [
-        "jpeg",
-        "png",
-        "webp",
-        "avif",
-      ],
+      enum: ["jpeg", "png", "webp", "avif"],
       default: "jpeg",
       required: true,
     },
-
     quality: {
       type: Number,
       min: 10,
       max: 100,
       default: 80,
     },
-
     maintainAspectRatio: {
       type: Boolean,
       default: true,
     },
   },
-  {
-    _id: false,
-  }
+  { _id: false }
 );
 
 // =====================================
@@ -163,17 +139,22 @@ const jobSchema = new Schema<IJob>(
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
+      index: true,
+    },
+
+    guestId: {
+      type: String,
+      trim: true,
+      minlength: 20,
+      maxlength: 200,
+      required: false,
+      select: false,
     },
 
     status: {
       type: String,
-      enum: [
-        "pending",
-        "processing",
-        "completed",
-        "failed",
-      ],
+      enum: ["pending", "processing", "completed", "failed"],
       default: "pending",
       required: true,
     },
@@ -215,20 +196,36 @@ const jobSchema = new Schema<IJob>(
   }
 );
 
+// Every job must belong to either a user or a guest.
+jobSchema.pre("validate", function () {
+  const hasUser = Boolean(this.userId);
+  const hasGuest = Boolean(this.guestId);
+
+  if (hasUser === hasGuest) {
+    this.invalidate(
+      "userId",
+      "A job must belong to exactly one user or guest."
+    );
+  }
+});
+
 // =====================================
 // Indexes
 // =====================================
 
-// Fast user job history.
 jobSchema.index({
   userId: 1,
   createdAt: -1,
 });
 
-// Fast filtering by status.
 jobSchema.index({
   userId: 1,
   status: 1,
+  createdAt: -1,
+});
+
+jobSchema.index({
+  guestId: 1,
   createdAt: -1,
 });
 
@@ -239,7 +236,4 @@ jobSchema.index({
 export const Job =
   mongoose.models.Job
     ? mongoose.model<IJob>("Job")
-    : mongoose.model<IJob>(
-        "Job",
-        jobSchema
-      );
+    : mongoose.model<IJob>("Job", jobSchema);
