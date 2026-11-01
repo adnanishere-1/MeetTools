@@ -15,6 +15,10 @@ import {
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
+const API = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+});
+
 interface DashboardStats {
   totalUsers: number;
   totalAdmins: number;
@@ -53,15 +57,9 @@ interface AdminResponse {
 export default function AdminDashboardPage() {
   const router = useRouter();
 
-  const [stats, setStats] =
-    useState<DashboardStats | null>(null);
-
-  const [actionStats, setActionStats] =
-    useState<ToolStat[]>([]);
-
-  const [recentActivities, setRecentActivities] =
-    useState<ActivityLog[]>([]);
-
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [actionStats, setActionStats] = useState<ToolStat[]>([]);
+  const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -70,8 +68,8 @@ export default function AdminDashboardPage() {
 
     const fetchAdminData = async () => {
       try {
-        const response = await axios.get<AdminResponse>(
-          "/api/v1/admin/dashboard",
+        const response = await API.get<AdminResponse>(
+          "/admin/dashboard",
           {
             withCredentials: true,
           }
@@ -80,14 +78,8 @@ export default function AdminDashboardPage() {
         if (!active) return;
 
         setStats(response.data.stats);
-
-        setActionStats(
-          response.data.actionStats || []
-        );
-
-        setRecentActivities(
-          response.data.recentActivities || []
-        );
+        setActionStats(response.data.actionStats || []);
+        setRecentActivities(response.data.recentActivities || []);
       } catch (error: unknown) {
         if (!active) return;
 
@@ -124,16 +116,13 @@ export default function AdminDashboardPage() {
 
   const mostUsedTool =
     actionStats.length > 0
-      ? [...actionStats].sort(
-          (a, b) => b.count - a.count
-        )[0]
+      ? [...actionStats].sort((a, b) => b.count - a.count)[0]
       : null;
 
-  const totalActionsCount =
-    actionStats.reduce(
-      (acc, curr) => acc + curr.count,
-      0
-    );
+  const totalActionsCount = actionStats.reduce(
+    (acc, curr) => acc + curr.count,
+    0
+  );
 
   if (loading) {
     return (
@@ -141,10 +130,7 @@ export default function AdminDashboardPage() {
         <Navbar />
 
         <div className="flex-1 flex items-center justify-center gap-3 text-[#fb8500] font-bold text-lg">
-          <SpinnerIcon
-            size={32}
-            className="animate-spin"
-          />
+          <SpinnerIcon size={32} className="animate-spin" />
           Loading Admin Control Center...
         </div>
       </div>
@@ -179,14 +165,10 @@ export default function AdminDashboardPage() {
       <Navbar />
 
       <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full">
-
         <div className="mb-8 pb-4 border-b border-[#fb8500]/20 flex items-center justify-between">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-xs font-bold mb-2">
-              <CrownIcon
-                size={16}
-                weight="fill"
-              />
+              <CrownIcon size={16} weight="fill" />
               <span>Administrator Portal</span>
             </div>
 
@@ -202,7 +184,6 @@ export default function AdminDashboardPage() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-
           {/* Total Users */}
           <div className="bg-white p-6 rounded-3xl border border-[#fb8500]/25 shadow-xl">
             <div className="flex items-center justify-between mb-2">
@@ -267,16 +248,11 @@ export default function AdminDashboardPage() {
                 Top Used Tool / Action
               </p>
 
-              <FlameIcon
-                size={24}
-                weight="fill"
-              />
+              <FlameIcon size={24} weight="fill" />
             </div>
 
             <h2 className="text-xl font-black truncate mt-1">
-              {mostUsedTool
-                ? mostUsedTool._id
-                : "No Activity Yet"}
+              {mostUsedTool ? mostUsedTool._id : "No Activity Yet"}
             </h2>
 
             <p className="text-[11px] opacity-80 mt-1">
@@ -289,7 +265,6 @@ export default function AdminDashboardPage() {
 
         {/* Tool Usage Graph & Logs */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
           {/* Tool Analytics */}
           <div className="bg-white p-6 rounded-3xl border border-[#fb8500]/20 shadow-xl">
             <h3 className="text-lg font-bold text-[#121212] mb-4 flex items-center gap-2">
@@ -311,10 +286,7 @@ export default function AdminDashboardPage() {
                       : 0;
 
                   return (
-                    <div
-                      key={item._id}
-                      className="space-y-1"
-                    >
+                    <div key={item._id} className="space-y-1">
                       <div className="flex justify-between text-xs font-bold text-[#333333]">
                         <span className="truncate max-w-[160px]">
                           {item._id}
@@ -328,20 +300,13 @@ export default function AdminDashboardPage() {
                       <div className="w-full bg-[#fff3ec] h-3 rounded-full overflow-hidden border border-[#fb8500]/20">
                         <div
                           className="bg-gradient-to-r from-[#fb8500] to-[#ffb703] h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${percentage}%`,
-                          }}
+                          style={{ width: `${percentage}%` }}
                         />
                       </div>
 
                       <div className="flex justify-between text-[10px] text-[#777777]">
-                        <span>
-                          Guest: {item.guestCount}
-                        </span>
-
-                        <span>
-                          Logged In: {item.userCount}
-                        </span>
+                        <span>Guest: {item.guestCount}</span>
+                        <span>Logged In: {item.userCount}</span>
                       </div>
                     </div>
                   );
@@ -379,21 +344,10 @@ export default function AdminDashboardPage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-[#fb8500]/20 text-[#555555] sticky top-0 bg-white">
-                    <th className="pb-3 font-bold">
-                      User
-                    </th>
-
-                    <th className="pb-3 font-bold">
-                      Action / Tool
-                    </th>
-
-                    <th className="pb-3 font-bold">
-                      Visitor Type
-                    </th>
-
-                    <th className="pb-3 font-bold">
-                      Time
-                    </th>
+                    <th className="pb-3 font-bold">User</th>
+                    <th className="pb-3 font-bold">Action / Tool</th>
+                    <th className="pb-3 font-bold">Visitor Type</th>
+                    <th className="pb-3 font-bold">Time</th>
                   </tr>
                 </thead>
 
@@ -408,8 +362,7 @@ export default function AdminDashboardPage() {
                           {log.userId?.name || "Guest"}
 
                           <span className="block text-[10px] text-[#777777] font-normal">
-                            {log.userId?.email ||
-                              "Anonymous"}
+                            {log.userId?.email || "Anonymous"}
                           </span>
                         </td>
 
@@ -426,9 +379,7 @@ export default function AdminDashboardPage() {
                         </td>
 
                         <td className="py-3 text-[#555555]">
-                          {new Date(
-                            log.createdAt
-                          ).toLocaleString()}
+                          {new Date(log.createdAt).toLocaleString()}
                         </td>
                       </tr>
                     ))
@@ -447,7 +398,6 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
-
       </main>
     </div>
   );

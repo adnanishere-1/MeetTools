@@ -14,6 +14,7 @@ import { imagekit } from "../config/imagekit.js";
 import { redisConnectionOptions } from "../config/redis.js";
 import { logger } from "../utils/logger.js";
 import { ActivityLog } from "../models/ActivityLog.model.js";
+import { Job as DatabaseJob } from "../models/Job.model.js";
 
 // =====================================
 // Types
@@ -27,6 +28,7 @@ interface ResizeTransformations {
 }
 
 interface ResizeJobData {
+  dbJobId?: string;
   userId?: string;
   fileId?: string;
   fileUrl: string;
@@ -94,6 +96,37 @@ async function ensureMongoConnection():
   } catch (error) {
     mongoConnectionPromise = null;
     throw error;
+  }
+}
+
+// =====================================
+// MongoDB Job Status Helpers
+// =====================================
+
+async function updateDatabaseJob(
+  dbJobId: string | undefined,
+  update: Record<string, unknown>
+): Promise<void> {
+  if (!dbJobId) {
+    logger.warn(
+      "MongoDB job ID missing. Job status was not updated."
+    );
+    return;
+  }
+
+  await ensureMongoConnection();
+
+  const updatedJob =
+    await DatabaseJob.findByIdAndUpdate(
+      dbJobId,
+      update,
+      { new: true }
+    );
+
+  if (!updatedJob) {
+    throw new Error(
+      `MongoDB job not found: ${dbJobId}`
+    );
   }
 }
 
@@ -247,6 +280,7 @@ const processResizeJob = async (
   job: Job<ResizeJobData, ResizeJobResult>
 ): Promise<ResizeJobResult> => {
   const {
+    dbJobId,
     fileId,
     fileUrl,
     originalFileName,
@@ -259,9 +293,24 @@ const processResizeJob = async (
   );
 
   try {
+    // Update MongoDB when processing starts.
+    await updateDatabaseJob(dbJobId, {
+      $set: {
+        status: "processing",
+        progress: 0,
+      },
+      $unset: {
+        error: 1,
+      },
+    });
+
     validateSourceUrl(fileUrl);
 
     await job.updateProgress(20);
+
+    await updateDatabaseJob(dbJobId, {
+      $set: { progress: 20 },
+    });
 
     const width = validateInteger(
       transformations?.width,
@@ -306,6 +355,10 @@ const processResizeJob = async (
 
     await job.updateProgress(40);
 
+    await updateDatabaseJob(dbJobId, {
+      $set: { progress: 40 },
+    });
+
     const transformation: ImageKitTransformation[] = [];
 
     if (width !== null || height !== null) {
@@ -334,12 +387,20 @@ const processResizeJob = async (
 
     await job.updateProgress(60);
 
+    await updateDatabaseJob(dbJobId, {
+      $set: { progress: 60 },
+    });
+
     const resizedUrl = imagekit.url({
       src: fileUrl,
       transformation,
     });
 
     await job.updateProgress(80);
+
+    await updateDatabaseJob(dbJobId, {
+      $set: { progress: 80 },
+    });
 
     const result: ResizeJobResult = {
       success: true,
@@ -357,6 +418,28 @@ const processResizeJob = async (
       width,
       height,
     };
+
+    // Save completed status and output in MongoDB.
+    await updateDatabaseJob(dbJobId, {
+      $set: {
+        status: "completed",
+        progress: 100,
+        completedAt: new Date(),
+        outputFiles: [
+          {
+            fileId: fileId || "",
+            url: resizedUrl,
+            fileName: result.fileName,
+            fileSize: result.fileSize,
+            ...(width !== null ? { width } : {}),
+            ...(height !== null ? { height } : {}),
+          },
+        ],
+      },
+      $unset: {
+        error: 1,
+      },
+    });
 
     await recordToolUsage(job, {
       width,
@@ -416,7 +499,7 @@ resizeWorker.on("completed", (job) => {
   );
 });
 
-resizeWorker.on("failed", (job, error) => {
+resizeWorker.on("failed", async (job, error) => {
   logger.error(
     {
       err: error,
@@ -424,6 +507,42 @@ resizeWorker.on("failed", (job, error) => {
     },
     "💥 Resize Job failed"
   );
+
+  if (!job?.data?.dbJobId) {
+    return;
+  }
+
+  const maxAttempts = Number(
+    job.opts.attempts ?? 1
+  );
+
+  // Wait until all BullMQ retries are exhausted.
+  if (job.attemptsMade >= maxAttempts) {
+    try {
+      await updateDatabaseJob(
+        job.data.dbJobId,
+        {
+          $set: {
+            status: "failed",
+            error: {
+              message:
+                error.message ||
+                "Image processing failed",
+              code: "IMAGE_PROCESSING_FAILED",
+            },
+          },
+        }
+      );
+    } catch (dbError) {
+      logger.error(
+        {
+          err: dbError,
+          jobId: job.id,
+        },
+        "Failed to update MongoDB job status"
+      );
+    }
+  }
 });
 
 resizeWorker.on("error", (error) => {
