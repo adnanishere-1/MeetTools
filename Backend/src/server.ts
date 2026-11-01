@@ -1,16 +1,13 @@
-import { config } from "dotenv";
-import "dotenv";
-config();
+
+import "dotenv/config";
 
 import app from "./app.js";
 import { connectDB } from "./config/db.js";
 import { redis } from "./config/redis.js";
 import { logger } from "./utils/logger.js";
 
-// BullMQ image processing worker
+// BullMQ resize worker
 import "./workers/resizeWorker.js";
-
-
 
 const PORT = Number(process.env.PORT) || 5000;
 
@@ -18,7 +15,12 @@ let isShuttingDown = false;
 
 async function startServer(): Promise<void> {
   try {
+    // Connect to MongoDB
     await connectDB();
+
+    // Verify Redis connection
+    await redis.ping();
+    logger.info("Redis connection verified successfully.");
 
     const server = app.listen(PORT, () => {
       logger.info(
@@ -29,22 +31,15 @@ async function startServer(): Promise<void> {
     });
 
     const handleShutdown = (signal: string): void => {
-      if (isShuttingDown) {
-        return;
-      }
+      if (isShuttingDown) return;
 
       isShuttingDown = true;
 
-      logger.info(
-        `${signal} received. Shutting down gracefully...`
-      );
+      logger.info(`${signal} received. Shutting down gracefully...`);
 
       server.close(async (error) => {
         if (error) {
-          logger.error(
-            { err: error },
-            "Error closing HTTP server"
-          );
+          logger.error({ err: error }, "Error closing HTTP server");
         } else {
           logger.info("HTTP server closed");
         }
@@ -63,19 +58,10 @@ async function startServer(): Promise<void> {
       });
     };
 
-    process.on("SIGTERM", () => {
-      handleShutdown("SIGTERM");
-    });
-
-    process.on("SIGINT", () => {
-      handleShutdown("SIGINT");
-    });
+    process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+    process.on("SIGINT", () => handleShutdown("SIGINT"));
   } catch (error) {
-    logger.error(
-      { err: error },
-      "Failed to start server"
-    );
-
+    logger.error({ err: error }, "Failed to start server");
     process.exit(1);
   }
 }

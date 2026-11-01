@@ -23,23 +23,56 @@ import adminroutes from "./routes/admin.routes.js";
 
 const app: Application = express();
 
+const isProduction = process.env.NODE_ENV === "production";
+
+// Support multiple frontend URLs separated by commas.
+const configuredOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+]
+  .filter((value): value is string => Boolean(value))
+  .flatMap((value) => value.split(","))
+  .map((value) => value.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+if (!isProduction) {
+  configuredOrigins.push("http://localhost:3000");
+}
+
+if (isProduction && configuredOrigins.length === 0) {
+  logger.warn(
+    "No frontend origin configured. Set FRONTEND_URL in production."
+  );
+}
+
 app.use(helmet());
 
 app.use(
   cors({
-    origin:
-      process.env.CLIENT_URL ||
-      "http://localhost:3000",
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header, such as server-to-server calls.
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.replace(/\/$/, "");
+
+      if (configuredOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      logger.warn(`CORS blocked origin: ${origin}`);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
 
-if (process.env.NODE_ENV === "production") {
+if (isProduction) {
   app.use(
     morgan("combined", {
       stream: {
-        write: (message) =>
-          logger.info(message.trim()),
+        write: (message) => logger.info(message.trim()),
       },
     })
   );
@@ -47,7 +80,7 @@ if (process.env.NODE_ENV === "production") {
   app.use(morgan("dev"));
 }
 
-// Body parsers MUST run before routes.
+// Body parsers must run before routes.
 app.use(express.json({ limit: "10mb" }));
 
 app.use(
@@ -59,30 +92,29 @@ app.use(
 
 app.use(cookieParser());
 
-// Temporary debugging: remove after diagnosis.
-if (process.env.NODE_ENV !== "production") {
+// Development-only auth request debugging.
+if (!isProduction) {
   app.use("/api/v1/auth", (req, _res, next) => {
     if (req.method === "POST") {
-      console.log("[AUTH BODY DEBUG]", {
+      logger.info({
         path: req.path,
         contentType: req.headers["content-type"],
         contentLength: req.headers["content-length"],
-        bodyExists:
-          req.body !== undefined &&
-          req.body !== null,
+        bodyExists: req.body !== undefined && req.body !== null,
         bodyKeys:
           req.body &&
           typeof req.body === "object" &&
           !Array.isArray(req.body)
             ? Object.keys(req.body)
             : [],
-      });
+      }, "Auth request debug");
     }
 
     next();
   });
 }
 
+// API routes
 app.use("/api/v1/auth", authroutes);
 app.use("/api/v1/users", userroutes);
 app.use("/api/v1/images", imageroutes);
@@ -91,6 +123,7 @@ app.use("/api/v1/presets", presetroutes);
 app.use("/api/v1/activity-logs", activitylogroutes);
 app.use("/api/v1/admin", adminroutes);
 
+// Render health check endpoint
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
@@ -99,10 +132,9 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
+// 404 handler
 app.use((req, res) => {
-  logger.warn(
-    `404 Not Found: ${req.method} ${req.originalUrl}`
-  );
+  logger.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
 
   res.status(404).json({
     success: false,
@@ -113,6 +145,7 @@ app.use((req, res) => {
   });
 });
 
+// Global error handler
 app.use(errorHandler);
 
 export default app;
