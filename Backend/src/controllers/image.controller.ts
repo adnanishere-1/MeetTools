@@ -1,6 +1,5 @@
 
 import mongoose from "mongoose";
-import crypto from "node:crypto";
 
 import type {
   Request,
@@ -46,6 +45,7 @@ type ImageRequest = Request & {
     id?: string;
     _id?: string | mongoose.Types.ObjectId;
   };
+  guestId?: string;
 };
 
 // =====================================
@@ -121,9 +121,7 @@ function parseOptionalDimension(
   return parsed;
 }
 
-function parseQuality(
-  value: unknown
-): number {
+function parseQuality(value: unknown): number {
   if (
     value === undefined ||
     value === null ||
@@ -169,11 +167,7 @@ function parseFormat(
     );
   }
 
-  return value as
-    | "jpeg"
-    | "png"
-    | "webp"
-    | "avif";
+  return value as "jpeg" | "png" | "webp" | "avif";
 }
 
 function parsePreserveResolution(
@@ -222,14 +216,11 @@ function parseTargetSize(
     return undefined;
   }
 
-  const value = Number(
-    hasMB ? mb : kb
-  );
+  const value = Number(hasMB ? mb : kb);
 
-  const max =
-    hasMB
-      ? MAX_TARGET_SIZE_MB
-      : MAX_TARGET_SIZE_MB * 1024;
+  const max = hasMB
+    ? MAX_TARGET_SIZE_MB
+    : MAX_TARGET_SIZE_MB * 1024;
 
   if (
     !Number.isFinite(value) ||
@@ -247,10 +238,10 @@ function parseTargetSize(
   );
 }
 
-// Atomic INCR + first-request expiry.
-//
-// This is a fixed 24-hour window starting
-// from the first accepted request.
+// =====================================
+// Redis Daily Limit
+// =====================================
+
 const DAILY_LIMIT_SCRIPT = `
 local count = redis.call("INCR", KEYS[1])
 
@@ -272,8 +263,7 @@ async function checkAndIncrementDailyLimit(
   allowed: boolean;
   remaining: number;
 }> {
-  const key =
-    `daily_image_limit:${identifier}`;
+  const key = `daily_image_limit:${identifier}`;
 
   const result = await redis.eval(
     DAILY_LIMIT_SCRIPT,
@@ -305,13 +295,10 @@ async function checkAndIncrementDailyLimit(
   };
 }
 
-// Restore one quota slot if processing
-// could not even be queued.
 async function restoreDailyLimit(
   identifier: string
 ): Promise<void> {
-  const key =
-    `daily_image_limit:${identifier}`;
+  const key = `daily_image_limit:${identifier}`;
 
   const script = `
     local count = tonumber(redis.call("GET", KEYS[1]) or "0")
@@ -325,6 +312,10 @@ async function restoreDailyLimit(
 
   await redis.eval(script, 1, key);
 }
+
+// =====================================
+// Request Helpers
+// =====================================
 
 function getUploadedFile(
   req: ImageRequest
@@ -349,15 +340,12 @@ function getUploadedFile(
   return req.file;
 }
 
-function getJobIdParam(
-  req: Request
-): string {
+function getJobIdParam(req: Request): string {
   const raw = req.params.jobId;
 
-  const jobId =
-    Array.isArray(raw)
-      ? raw[0]
-      : raw;
+  const jobId = Array.isArray(raw)
+    ? raw[0]
+    : raw;
 
   if (
     typeof jobId !== "string" ||
@@ -390,14 +378,25 @@ async function queueImageProcessing(
 ) {
   const file = getUploadedFile(req);
 
-  const userId =
-    getAuthenticatedUserId(req);
+  const userId = getAuthenticatedUserId(req);
 
-  const identifier =
-    getClientIdentifier(req, userId);
+  // Guest identity comes from optionalAuthenticate.
+  const guestId = req.guestId;
 
-  const body =
-    req.body ?? {};
+  // A job must belong to exactly one identity.
+  if (!userId && !guestId) {
+    throw new ApiError(
+      STATUS_CODES.UNAUTHORIZED,
+      "Guest identity missing. Please refresh and try again."
+    );
+  }
+
+  const identifier = getClientIdentifier(
+    req,
+    userId
+  );
+
+  const body = req.body ?? {};
 
   const width = parseOptionalDimension(
     body.width,
@@ -409,11 +408,9 @@ async function queueImageProcessing(
     "Height"
   );
 
-  const quality =
-    parseQuality(body.quality);
+  const quality = parseQuality(body.quality);
 
-  const format =
-    parseFormat(body.format);
+  const format = parseFormat(body.format);
 
   const preserveResolution =
     config.includeCompressionOptions
@@ -431,9 +428,7 @@ async function queueImageProcessing(
       : undefined;
 
   const limitCheck =
-    await checkAndIncrementDailyLimit(
-      identifier
-    );
+    await checkAndIncrementDailyLimit(identifier);
 
   if (!limitCheck.allowed) {
     throw new ApiError(
@@ -442,29 +437,28 @@ async function queueImageProcessing(
     );
   }
 
-  let uploadedFileId:
-    | string
-    | undefined;
-
-  let createdDbJobId:
-    | string
-    | undefined;
-
+  let uploadedFileId: string | undefined;
+  let createdDbJobId: string | undefined;
   let queueAdded = false;
 
   try {
-    const uploadResult =
-      await uploadToImageKit(
-        file.buffer,
-        file.originalname,
-        config.folder
-      );
+    const uploadResult = await uploadToImageKit(
+      file.buffer,
+      file.originalname,
+      config.folder
+    );
 
-    uploadedFileId =
-      uploadResult.fileId;
+    uploadedFileId = uploadResult.fileId;
+
+    // =====================================
+    // FIX: Save userId OR guestId
+    // =====================================
 
     const dbJob = await Job.create({
-      ...(userId ? { userId } : {}),
+      ...(userId
+        ? { userId }
+        : { guestId }),
+
       status: "pending",
       progress: 0,
 
@@ -487,50 +481,39 @@ async function queueImageProcessing(
       },
     });
 
-    createdDbJobId =
-      dbJob._id.toString();
+    createdDbJobId = dbJob._id.toString();
 
-    const bullJob =
-      await resizeQueue.add(
-        config.queueName,
-        {
-          dbJobId:
-            createdDbJobId,
+    const bullJob = await resizeQueue.add(
+      config.queueName,
+      {
+        dbJobId: createdDbJobId,
 
-          userId: identifier,
+        userId: identifier,
 
-          fileId:
-            uploadResult.fileId,
+        fileId: uploadResult.fileId,
+        fileUrl: uploadResult.url,
 
-          fileUrl:
-            uploadResult.url,
+        originalFileName: file.originalname,
+        originalSize: file.size,
 
-          originalFileName:
-            file.originalname,
+        transformations: {
+          width,
+          height,
+          quality,
+          format,
 
-          originalSize:
-            file.size,
-
-          transformations: {
-            width,
-            height,
-            quality,
-            format,
-
-            ...(config.includeCompressionOptions
-              ? {
-                  maxSizeBytes,
-                  preserveResolution,
-                }
-              : {}),
-          },
+          ...(config.includeCompressionOptions
+            ? {
+                maxSizeBytes,
+                preserveResolution,
+              }
+            : {}),
         },
-        {
-          // Keep queue ID identical
-          // to MongoDB Job ID.
-          jobId: createdDbJobId,
-        }
-      );
+      },
+      {
+        jobId: createdDbJobId,
+      }
+    );
 
     queueAdded = true;
 
@@ -538,11 +521,9 @@ async function queueImageProcessing(
       .status(STATUS_CODES.CREATED)
       .json({
         success: true,
-        message:
-          config.responseMessage,
+        message: config.responseMessage,
 
         jobId: bullJob.id,
-
         dbJobId: dbJob._id,
 
         remainingImagesToday:
@@ -550,18 +531,13 @@ async function queueImageProcessing(
       });
   } catch (error) {
     if (!queueAdded) {
-      // Best-effort cleanup.
-      // Cleanup errors should not replace
-      // the original error.
-
       if (createdDbJobId) {
         try {
           await Job.findByIdAndDelete(
             createdDbJobId
           );
         } catch {
-          // Log using your Pino logger
-          // if cleanup monitoring is needed.
+          // Best-effort database cleanup.
         }
       }
 
@@ -571,14 +547,12 @@ async function queueImageProcessing(
             uploadedFileId
           );
         } catch {
-          // Best-effort cleanup.
+          // Best-effort ImageKit cleanup.
         }
       }
 
       try {
-        await restoreDailyLimit(
-          identifier
-        );
+        await restoreDailyLimit(identifier);
       } catch {
         // Best-effort quota restoration.
       }
@@ -603,8 +577,7 @@ export const resizeImage = asyncHandler(
       {
         mode: "exact",
         folder: "/meettools/resizes",
-        queueName:
-          "meettools-resize-job",
+        queueName: "meetools-resize-job",
         responseMessage:
           "Image compression/resizing request queued successfully",
         includeCompressionOptions: true,
@@ -617,108 +590,92 @@ export const resizeImage = asyncHandler(
 // POST /api/v1/images/upload
 // =====================================
 
-export const uploadAndResizeImage =
-  asyncHandler(
-    async (
-      req: ImageRequest,
-      res: Response
-    ) => {
-      return queueImageProcessing(
-        req,
-        res,
-        {
-          mode: "fit",
-          folder: "/meettools/uploads",
-          queueName: "resize-image",
-          responseMessage:
-            "Image uploaded successfully and queued for resizing",
-          includeCompressionOptions: false,
-        }
-      );
-    }
-  );
+export const uploadAndResizeImage = asyncHandler(
+  async (
+    req: ImageRequest,
+    res: Response
+  ) => {
+    return queueImageProcessing(
+      req,
+      res,
+      {
+        mode: "fit",
+        folder: "/meetools/uploads",
+        queueName: "resize-image",
+        responseMessage:
+          "Image uploaded successfully and queued for resizing",
+        includeCompressionOptions: false,
+      }
+    );
+  }
+);
 
 // =====================================
 // GET /api/v1/images/status/:jobId
 // =====================================
 
-export const getJobResultStatus =
-  asyncHandler(
-    async (
-      req: ImageRequest,
-      res: Response
-    ) => {
-      const jobId =
-        getJobIdParam(req);
+export const getJobResultStatus = asyncHandler(
+  async (
+    req: ImageRequest,
+    res: Response
+  ) => {
+    const jobId = getJobIdParam(req);
 
-      const job =
-        await resizeQueue.getJob(
-          jobId
-        );
+    const job = await resizeQueue.getJob(jobId);
 
-      if (!job) {
-        throw new ApiError(
-          STATUS_CODES.NOT_FOUND,
-          "Job not found or expired"
-        );
-      }
+    if (!job) {
+      throw new ApiError(
+        STATUS_CODES.NOT_FOUND,
+        "Job not found or expired"
+      );
+    }
 
-      const state =
-        await job.getState();
+    const state = await job.getState();
 
-      if (state === "failed") {
-        return res
-          .status(STATUS_CODES.OK)
-          .json({
-            success: false,
-            status: "failed",
-            message:
-              "Image processing failed in background worker",
-            failedReason:
-              job.failedReason || null,
-          });
-      }
+    if (state === "failed") {
+      return res
+        .status(STATUS_CODES.OK)
+        .json({
+          success: false,
+          status: "failed",
+          message:
+            "Image processing failed in background worker",
+          failedReason:
+            job.failedReason || null,
+        });
+    }
 
-      if (state !== "completed") {
-        return res
-          .status(STATUS_CODES.OK)
-          .json({
-            success: true,
-            status: "processing",
-            message:
-              "Image is still processing in background...",
-          });
-      }
-
-      const result =
-        job.returnvalue;
-
+    if (state !== "completed") {
       return res
         .status(STATUS_CODES.OK)
         .json({
           success: true,
-          status: "completed",
+          status: "processing",
           message:
-            "Image processed successfully and details saved to database",
-
-          previewUrl:
-            result?.url,
-
-          downloadUrl:
-            result?.url,
-
-          fileDetails: {
-            fileId:
-              result?.fileId,
-            fileName:
-              result?.fileName,
-            fileSize:
-              result?.fileSize,
-            width:
-              result?.width,
-            height:
-              result?.height,
-          },
+            "Image is still processing in background...",
         });
     }
-  );
+
+    const result = job.returnvalue;
+
+    return res
+      .status(STATUS_CODES.OK)
+      .json({
+        success: true,
+        status: "completed",
+        message:
+          "Image processed successfully and details saved to database",
+
+        previewUrl: result?.url,
+        downloadUrl: result?.url,
+
+        fileDetails: {
+          fileId: result?.fileId,
+          fileName: result?.fileName,
+          fileSize: result?.fileSize,
+          width: result?.width,
+          height: result?.height,
+        },
+      });
+  }
+);
