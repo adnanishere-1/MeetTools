@@ -2,12 +2,12 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
- "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "lint": "eslint ."
-},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
+  },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
     "axios": "^1.20.0",
@@ -29,5 +29,8 @@
     "postcss": "^8.5.32",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
   }
 }
