@@ -241,7 +241,7 @@ const handleDirectDownload = (
       nameWithoutExtension || "downloaded-image"
     );
 
-    window.location.href = downloadUrl.toString();
+    window.location.assign(downloadUrl.toString());
   } catch (downloadError: unknown) {
     console.error("Failed to download asset:", downloadError);
     window.alert("Unable to download this file. Please try again.");
