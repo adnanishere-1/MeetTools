@@ -5,20 +5,13 @@ import type {
   NextFunction,
 } from "express";
 
-import jwt, {
-  type JwtPayload,
-} from "jsonwebtoken";
-
+import jwt, { type JwtPayload } from "jsonwebtoken";
 import mongoose from "mongoose";
 
 import { env } from "../config/env.js";
 import { User } from "../models/User.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { STATUS_CODES } from "../utils/statusCodes.js";
-
-// =====================================
-// Types
-// =====================================
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -34,9 +27,45 @@ type TokenPayload = JwtPayload & {
   sub?: string;
 };
 
-// =====================================
-// Authentication Middleware
-// =====================================
+const getCookieToken = (req: Request): string | undefined => {
+  // Read cookie parsed by cookie-parser.
+  const parsedToken = req.cookies?.meettools_token;
+
+  if (
+    typeof parsedToken === "string" &&
+    parsedToken.trim().length > 0
+  ) {
+    return parsedToken.trim();
+  }
+
+  // Fallback: read raw Cookie header.
+  const cookieHeader = req.headers.cookie;
+
+  if (!cookieHeader) {
+    return undefined;
+  }
+
+  const tokenCookie = cookieHeader
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) =>
+      cookie.startsWith("meettools_token=")
+    );
+
+  if (!tokenCookie) {
+    return undefined;
+  }
+
+  const rawValue = tokenCookie.slice(
+    "meettools_token=".length
+  );
+
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return rawValue;
+  }
+};
 
 export const authenticate = async (
   req: AuthenticatedRequest,
@@ -46,7 +75,7 @@ export const authenticate = async (
   try {
     req.user = undefined;
 
-    const cookieToken = req.cookies?.meetools_token;
+    const cookieToken = getCookieToken(req);
 
     const authHeader = req.headers.authorization;
 
@@ -56,10 +85,7 @@ export const authenticate = async (
         ? authHeader.slice(7).trim()
         : undefined;
 
-    const token =
-      typeof cookieToken === "string" && cookieToken
-        ? cookieToken
-        : bearerToken;
+    const token = cookieToken || bearerToken;
 
     if (!token) {
       throw new ApiError(
@@ -91,9 +117,7 @@ export const authenticate = async (
     const payload = decoded as TokenPayload;
 
     const userId =
-      payload.id ??
-      payload.userId ??
-      payload.sub;
+      payload.id ?? payload.userId ?? payload.sub;
 
     if (
       typeof userId !== "string" ||

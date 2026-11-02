@@ -1,4 +1,3 @@
-
 import type {
   Request,
   Response,
@@ -30,6 +29,7 @@ type OptionalAuthRequest = Request & {
 type TokenPayload = JwtPayload & {
   id?: string;
   userId?: string;
+  sub?: string;
   role?: string;
 };
 
@@ -41,13 +41,14 @@ type GuestPayload = JwtPayload & {
 // Cookie Configuration
 // =====================================
 
-const GUEST_COOKIE = "meetools_guest";
+const GUEST_COOKIE = "meettools_guest";
 
 const guestCookieOptions = {
   httpOnly: true,
   secure: env.NODE_ENV === "production",
-  sameSite: (env.NODE_ENV === "production" ? "none" : "lax") as
-    "none" | "lax",
+  sameSite: (
+    env.NODE_ENV === "production" ? "none" : "lax"
+  ) as "none" | "lax",
   path: "/",
   maxAge: 30 * 24 * 60 * 60 * 1000,
 };
@@ -64,7 +65,7 @@ export const optionalAuthenticate = (
   req.user = undefined;
   req.guestId = undefined;
 
-  const token = req.cookies?.meetools_token;
+  const token = req.cookies?.meettools_token;
 
   if (typeof token === "string" && token) {
     try {

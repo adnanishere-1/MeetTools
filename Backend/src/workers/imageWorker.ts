@@ -6,12 +6,10 @@ import {
 
 import { imagekit } from "../config/imagekit.js";
 import { redis } from "../config/redis.js";
+import { Job } from "../models/Job.model.js";
 import { logger } from "../utils/logger.js";
 
-// =====================================
 // Types
-// =====================================
-
 interface ImageTransformations {
   width?: number | string;
   height?: number | string;
@@ -20,9 +18,12 @@ interface ImageTransformations {
 }
 
 interface ImageJobData {
+  dbJobId: string;
   userId: string;
   fileId?: string;
   fileUrl: string;
+  originalFileName?: string;
+  originalSize?: number;
   transformations?: ImageTransformations;
 }
 
@@ -30,6 +31,10 @@ interface ImageJobResult {
   success: boolean;
   url: string;
   fileId?: string;
+  fileName?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
 }
 
 interface ImageKitTransformation {
@@ -39,10 +44,7 @@ interface ImageKitTransformation {
   format?: string;
 }
 
-// =====================================
-// Validation Helpers
-// =====================================
-
+// Validate dimensions and quality
 function validatePositiveInteger(
   value: number | string | undefined,
   fieldName: string,
@@ -71,6 +73,7 @@ function validatePositiveInteger(
   return String(parsed);
 }
 
+// Build ImageKit transformations
 function buildTransformations(
   transformations?: ImageTransformations
 ): ImageKitTransformation[] {
@@ -98,23 +101,13 @@ function buildTransformations(
     100
   );
 
-  if (width) {
-    result.push({ width });
-  }
-
-  if (height) {
-    result.push({ height });
-  }
-
-  if (quality) {
-    result.push({ quality });
-  }
+  if (width) result.push({ width });
+  if (height) result.push({ height });
+  if (quality) result.push({ quality });
 
   if (transformations.format) {
     const requestedFormat =
-      transformations.format
-        .trim()
-        .toLowerCase();
+      transformations.format.trim().toLowerCase();
 
     const normalizedFormat =
       requestedFormat === "jpg"
@@ -129,9 +122,7 @@ function buildTransformations(
       "auto",
     ];
 
-    if (
-      !allowedFormats.includes(normalizedFormat)
-    ) {
+    if (!allowedFormats.includes(normalizedFormat)) {
       throw new Error(
         `Unsupported image format: ${requestedFormat}`
       );
@@ -145,26 +136,23 @@ function buildTransformations(
   return result;
 }
 
+// Validate incoming job
 function validateImageJob(
   data: ImageJobData
 ): void {
   if (
     !data ||
-    typeof data.userId !== "string" ||
-    !data.userId.trim()
+    typeof data.dbJobId !== "string" ||
+    !data.dbJobId.trim()
   ) {
-    throw new Error(
-      "Missing or invalid userId."
-    );
+    throw new Error("Missing or invalid dbJobId.");
   }
 
   if (
     typeof data.fileUrl !== "string" ||
     !data.fileUrl.trim()
   ) {
-    throw new Error(
-      "Missing or invalid fileUrl."
-    );
+    throw new Error("Missing or invalid fileUrl.");
   }
 
   let parsedUrl: URL;
@@ -172,9 +160,7 @@ function validateImageJob(
   try {
     parsedUrl = new URL(data.fileUrl);
   } catch {
-    throw new Error(
-      "Invalid source image URL."
-    );
+    throw new Error("Invalid source image URL.");
   }
 
   if (
@@ -187,37 +173,49 @@ function validateImageJob(
   }
 }
 
-// =====================================
-// Process Image Job
-// =====================================
-
+// Process image job
 const processImageJob = async (
   job: BullJob<ImageJobData, ImageJobResult>
 ): Promise<ImageJobResult> => {
   const {
+    dbJobId,
     userId,
     fileId,
     fileUrl,
+    originalFileName,
+    originalSize,
     transformations,
   } = job.data;
 
   logger.info(
-    `⚙️ Processing image job ${job.id} for user/IP: ${userId}`
+    `Processing MeetTools image job ${job.id} for ${userId}`
   );
 
   try {
-    // Step 1: Validate job data.
     validateImageJob(job.data);
+
+    const dbJob = await Job.findById(dbJobId);
+
+    if (!dbJob) {
+      throw new Error(
+        `Database job not found: ${dbJobId}`
+      );
+    }
+
+    await Job.findByIdAndUpdate(dbJobId, {
+      $set: {
+        status: "processing",
+        progress: 10,
+      },
+    });
 
     await job.updateProgress(20);
 
-    // Step 2: Build ImageKit transformations.
     const transformArray =
       buildTransformations(transformations);
 
     await job.updateProgress(50);
 
-    // Step 3: Generate transformed image URL.
     let finalOutputUrl = fileUrl;
 
     if (transformArray.length > 0) {
@@ -229,68 +227,106 @@ const processImageJob = async (
 
     await job.updateProgress(80);
 
-    // Original ImageKit file is preserved.
-    // The returned URL can be used by the
-    // controller for preview and download.
-
     const result: ImageJobResult = {
       success: true,
       url: finalOutputUrl,
       fileId,
+      fileName: originalFileName || "resized-image",
+      fileSize: originalSize || 0,
+      ...(transformations?.width
+        ? { width: Number(transformations.width) }
+        : {}),
+      ...(transformations?.height
+        ? { height: Number(transformations.height) }
+        : {}),
     };
+
+    // Save output file in MongoDB
+    await Job.findByIdAndUpdate(dbJobId, {
+      $set: {
+        status: "completed",
+        progress: 100,
+        outputFiles: [
+          {
+            fileId: fileId || "",
+            url: finalOutputUrl,
+            fileName: result.fileName,
+            fileSize: result.fileSize,
+            ...(result.width !== undefined
+              ? { width: result.width }
+              : {}),
+            ...(result.height !== undefined
+              ? { height: result.height }
+              : {}),
+          },
+        ],
+      },
+    });
 
     await job.updateProgress(100);
 
     logger.info(
-      `✅ Image job ${job.id} processed successfully`
+      `MeetTools image job ${job.id} saved successfully to MongoDB`
     );
 
     return result;
   } catch (error: unknown) {
+    try {
+      if (dbJobId) {
+        await Job.findByIdAndUpdate(dbJobId, {
+          $set: {
+            status: "failed",
+          },
+        });
+      }
+    } catch (databaseError) {
+      logger.error(
+        {
+          err: databaseError,
+          dbJobId,
+        },
+        "Failed to update database job status"
+      );
+    }
+
     logger.error(
       {
         err: error,
         jobId: job.id,
+        dbJobId,
         userId,
       },
-      "❌ Failed to process image job"
+      "Failed to process MeetTools image job"
     );
 
     throw error;
   }
 };
 
-// =====================================
 // Initialize Worker
-// =====================================
-
+// IMPORTANT: This name MUST match the Queue name in the controller.
 export const imageWorker = new Worker<
   ImageJobData,
   ImageJobResult
 >(
-  "meettools-image-queue",
+  "meettools-resize-job",
   processImageJob,
   {
-    // Reuse your existing Redis connection.
     connection: redis,
-
     concurrency: 5,
   }
 );
 
-// =====================================
-// Worker Events
-// =====================================
-
+// Worker events
 imageWorker.on("ready", () => {
   logger.info(
-    "✅ MeetTools Image Worker connected to Redis."
+    "MeetTools Image Worker connected to Redis."
   );
 });
 
 imageWorker.on("completed", (job) => {
   logger.info(
-    `🎉 BullMQ Image Job ${job.id} completed successfully.`
+    `MeetTools BullMQ Image Job ${job.id} completed successfully.`
   );
 });
 
@@ -300,36 +336,28 @@ imageWorker.on("failed", (job, error) => {
       err: error,
       jobId: job?.id ?? "unknown",
     },
-    "❌ BullMQ Image Job failed"
+    "MeetTools BullMQ Image Job failed"
   );
 });
 
 imageWorker.on("error", (error) => {
   logger.error(
-    {
-      err: error,
-    },
-    "❌ MeetTools Image Worker error"
+    { err: error },
+    "MeetTools Image Worker error"
   );
 });
 
-// =====================================
-// Graceful Shutdown
-// =====================================
-
-export async function closeImageWorker():
-  Promise<void> {
-  logger.info(
-    "🛑 Closing MeetTools Image Worker..."
-  );
+// Graceful shutdown
+export async function closeImageWorker(): Promise<void> {
+  logger.info("Closing MeetTools Image Worker...");
 
   await imageWorker.close();
 
   logger.info(
-    "✅ MeetTools Image Worker closed successfully."
+    "MeetTools Image Worker closed successfully."
   );
 }
 
 logger.info(
-  "🚀 MeetTools Image Worker initialized and waiting for jobs..."
+  "MeetTools Image Worker initialized and waiting for jobs..."
 );

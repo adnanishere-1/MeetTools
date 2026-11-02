@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 
 import type {
@@ -19,11 +18,8 @@ import { resizeQueue } from "../queues/imageQueue.js";
 import { redis } from "../config/redis.js";
 import { Job } from "../models/Job.model.js";
 
-// =====================================
 // Configuration
-// =====================================
-
-const DAILY_LIMIT = 15;
+const DAILY_LIMIT = 20;
 const LIMIT_TTL_SECONDS = 24 * 60 * 60;
 
 const MAX_DIMENSION = 10000;
@@ -36,10 +32,7 @@ const ALLOWED_FORMATS = new Set([
   "avif",
 ]);
 
-// =====================================
 // Request Types
-// =====================================
-
 type ImageRequest = Request & {
   user?: {
     id?: string;
@@ -48,10 +41,7 @@ type ImageRequest = Request & {
   guestId?: string;
 };
 
-// =====================================
 // Helpers
-// =====================================
-
 function getAuthenticatedUserId(
   req: ImageRequest
 ): string | undefined {
@@ -238,10 +228,7 @@ function parseTargetSize(
   );
 }
 
-// =====================================
 // Redis Daily Limit
-// =====================================
-
 const DAILY_LIMIT_SCRIPT = `
 local count = redis.call("INCR", KEYS[1])
 
@@ -313,10 +300,7 @@ async function restoreDailyLimit(
   await redis.eval(script, 1, key);
 }
 
-// =====================================
 // Request Helpers
-// =====================================
-
 function getUploadedFile(
   req: ImageRequest
 ): Express.Multer.File {
@@ -361,10 +345,7 @@ function getJobIdParam(req: Request): string {
   return jobId;
 }
 
-// =====================================
 // Shared Queue Logic
-// =====================================
-
 async function queueImageProcessing(
   req: ImageRequest,
   res: Response,
@@ -379,11 +360,8 @@ async function queueImageProcessing(
   const file = getUploadedFile(req);
 
   const userId = getAuthenticatedUserId(req);
-
-  // Guest identity comes from optionalAuthenticate.
   const guestId = req.guestId;
 
-  // A job must belong to exactly one identity.
   if (!userId && !guestId) {
     throw new ApiError(
       STATUS_CODES.UNAUTHORIZED,
@@ -409,7 +387,6 @@ async function queueImageProcessing(
   );
 
   const quality = parseQuality(body.quality);
-
   const format = parseFormat(body.format);
 
   const preserveResolution =
@@ -450,10 +427,6 @@ async function queueImageProcessing(
 
     uploadedFileId = uploadResult.fileId;
 
-    // =====================================
-    // FIX: Save userId OR guestId
-    // =====================================
-
     const dbJob = await Job.create({
       ...(userId
         ? { userId }
@@ -487,12 +460,9 @@ async function queueImageProcessing(
       config.queueName,
       {
         dbJobId: createdDbJobId,
-
         userId: identifier,
-
         fileId: uploadResult.fileId,
         fileUrl: uploadResult.url,
-
         originalFileName: file.originalname,
         originalSize: file.size,
 
@@ -522,12 +492,9 @@ async function queueImageProcessing(
       .json({
         success: true,
         message: config.responseMessage,
-
         jobId: bullJob.id,
         dbJobId: dbJob._id,
-
-        remainingImagesToday:
-          limitCheck.remaining,
+        remainingImagesToday: limitCheck.remaining,
       });
   } catch (error) {
     if (!queueAdded) {
@@ -562,10 +529,7 @@ async function queueImageProcessing(
   }
 }
 
-// =====================================
 // POST /api/v1/images/resize
-// =====================================
-
 export const resizeImage = asyncHandler(
   async (
     req: ImageRequest,
@@ -577,7 +541,7 @@ export const resizeImage = asyncHandler(
       {
         mode: "exact",
         folder: "/meettools/resizes",
-        queueName: "meetools-resize-job",
+        queueName: "meettools-resize-job",
         responseMessage:
           "Image compression/resizing request queued successfully",
         includeCompressionOptions: true,
@@ -586,10 +550,7 @@ export const resizeImage = asyncHandler(
   }
 );
 
-// =====================================
 // POST /api/v1/images/upload
-// =====================================
-
 export const uploadAndResizeImage = asyncHandler(
   async (
     req: ImageRequest,
@@ -600,7 +561,7 @@ export const uploadAndResizeImage = asyncHandler(
       res,
       {
         mode: "fit",
-        folder: "/meetools/uploads",
+        folder: "/meettools/uploads",
         queueName: "resize-image",
         responseMessage:
           "Image uploaded successfully and queued for resizing",
@@ -610,10 +571,7 @@ export const uploadAndResizeImage = asyncHandler(
   }
 );
 
-// =====================================
 // GET /api/v1/images/status/:jobId
-// =====================================
-
 export const getJobResultStatus = asyncHandler(
   async (
     req: ImageRequest,
@@ -640,8 +598,7 @@ export const getJobResultStatus = asyncHandler(
           status: "failed",
           message:
             "Image processing failed in background worker",
-          failedReason:
-            job.failedReason || null,
+          failedReason: job.failedReason || null,
         });
     }
 

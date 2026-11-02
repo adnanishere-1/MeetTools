@@ -1,4 +1,3 @@
-
 import "dotenv/config";
 
 import { Queue } from "bullmq";
@@ -10,7 +9,9 @@ import { redisConnectionOptions } from "../config/redis.js";
 // Redis Connection
 // =====================================
 
-const redisConnection = new IORedis(redisConnectionOptions);
+const redisConnection = new IORedis(
+  redisConnectionOptions
+);
 
 // =====================================
 // Default Job Options
@@ -39,7 +40,7 @@ const defaultJobOptions = {
 // =====================================
 
 export const imageQueue = new Queue(
-  "meetools-image-queue",
+  "meettools-image-queue",
   {
     connection: redisConnection,
     defaultJobOptions,
@@ -51,7 +52,7 @@ export const imageQueue = new Queue(
 // =====================================
 
 export const cleanQueue = new Queue(
-  "meetools-clean-queue",
+  "meettools-clean-queue",
   {
     connection: redisConnection,
     defaultJobOptions,
@@ -63,7 +64,7 @@ export const cleanQueue = new Queue(
 // =====================================
 
 export const resizeQueue = new Queue(
-  "meetools-resize-queue",
+  "meettools-resize-queue",
   {
     connection: redisConnection,
     defaultJobOptions,

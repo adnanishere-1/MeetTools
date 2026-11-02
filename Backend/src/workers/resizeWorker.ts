@@ -1,3 +1,4 @@
+
 import "dotenv/config";
 
 import mongoose from "mongoose";
@@ -57,8 +58,38 @@ type ImageKitTransformation = {
   focus?: "auto";
   quality?: string;
   format?: string;
-  effectSharpen?: string;
 };
+
+// =====================================
+// Get Actual Transformed Image Size
+// =====================================
+
+async function getTransformedFileSize(
+  url: string
+): Promise<number> {
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      logger.warn(
+        `Could not calculate transformed image size. Status: ${response.status}`
+      );
+
+      return 0;
+    }
+
+    const buffer = await response.arrayBuffer();
+
+    return buffer.byteLength;
+  } catch (error) {
+    logger.warn(
+      { err: error },
+      "Could not calculate transformed image size. Resize will continue."
+    );
+
+    return 0;
+  }
+}
 
 // =====================================
 // Job Cancellation Helper
@@ -67,13 +98,9 @@ type ImageKitTransformation = {
 async function checkJobCancellation(
   jobId: string | undefined
 ): Promise<void> {
-  if (!jobId) {
-    return;
-  }
+  if (!jobId) return;
 
-  const cancellationKey =
-    `meetools:cancel-resize:${jobId}`;
-
+  const cancellationKey = `meetools:cancel-resize:${jobId}`;
   const cancelled = await redis.get(cancellationKey);
 
   if (cancelled === "1") {
@@ -87,14 +114,10 @@ async function checkJobCancellation(
 // MongoDB Connection For Activity Logs
 // =====================================
 
-let mongoConnectionPromise:
-  Promise<typeof mongoose> | null = null;
+let mongoConnectionPromise: Promise<typeof mongoose> | null = null;
 
-async function ensureMongoConnection():
-  Promise<void> {
-  if (mongoose.connection.readyState === 1) {
-    return;
-  }
+async function ensureMongoConnection(): Promise<void> {
+  if (mongoose.connection.readyState === 1) return;
 
   if (mongoose.connection.readyState === 2) {
     await mongoose.connection.asPromise();
@@ -103,8 +126,7 @@ async function ensureMongoConnection():
 
   if (!mongoConnectionPromise) {
     const mongoUri =
-      process.env.MONGODB_URI ||
-      process.env.MONGO_URI;
+      process.env.MONGODB_URI || process.env.MONGO_URI;
 
     if (!mongoUri) {
       throw new Error(
@@ -112,9 +134,7 @@ async function ensureMongoConnection():
       );
     }
 
-    mongoConnectionPromise = mongoose.connect(
-      mongoUri
-    );
+    mongoConnectionPromise = mongoose.connect(mongoUri);
   }
 
   try {
@@ -142,17 +162,14 @@ async function updateDatabaseJob(
 
   await ensureMongoConnection();
 
-  const updatedJob =
-    await DatabaseJob.findByIdAndUpdate(
-      dbJobId,
-      update,
-      { new: true }
-    );
+  const updatedJob = await DatabaseJob.findByIdAndUpdate(
+    dbJobId,
+    update,
+    { new: true }
+  );
 
   if (!updatedJob) {
-    throw new Error(
-      `MongoDB job not found: ${dbJobId}`
-    );
+    throw new Error(`MongoDB job not found: ${dbJobId}`);
   }
 }
 
@@ -188,9 +205,7 @@ function validateInteger(
   return parsed;
 }
 
-function validateSourceUrl(
-  fileUrl: string
-): void {
+function validateSourceUrl(fileUrl: string): void {
   if (
     typeof fileUrl !== "string" ||
     !fileUrl.trim()
@@ -242,24 +257,20 @@ async function recordToolUsage(
     const userId =
       authenticatedUserId &&
       mongoose.isValidObjectId(authenticatedUserId)
-        ? new mongoose.Types.ObjectId(
-            authenticatedUserId
-          )
+        ? new mongoose.Types.ObjectId(authenticatedUserId)
         : null;
 
     const activityId = new mongoose.Types.ObjectId(
       createHash("sha256")
         .update(
-          `meetools:image-resize:${job.queueName}:${job.id}`
+          `meettools:image-resize:${job.queueName}:${job.id}`
         )
         .digest()
         .subarray(0, 12)
     );
 
     const result = await ActivityLog.updateOne(
-      {
-        _id: activityId,
-      },
+      { _id: activityId },
       {
         $setOnInsert: {
           userId,
@@ -271,29 +282,22 @@ async function recordToolUsage(
             format: details.format,
             width: details.width,
             height: details.height,
-            visitorType: userId
-              ? "user"
-              : "guest",
+            visitorType: userId ? "user" : "guest",
           },
         },
       },
-      {
-        upsert: true,
-      }
+      { upsert: true }
     );
 
     if (result.upsertedCount > 0) {
       logger.info(
-        `📊 Tool usage recorded: Image Resize (${userId ? "Logged-in" : "Guest"})`
+        `Tool usage recorded: Image Resize (${userId ? "Logged-in" : "Guest"})`
       );
     }
   } catch (error: unknown) {
     logger.error(
-      {
-        err: error,
-        jobId: job.id,
-      },
-      "❌ Failed to record tool usage"
+      { err: error, jobId: job.id },
+      "Failed to record tool usage"
     );
   }
 }
@@ -310,29 +314,21 @@ const processResizeJob = async (
     fileId,
     fileUrl,
     originalFileName,
-    originalSize,
     transformations,
   } = job.data;
 
-  logger.info(
-    `📐 Resize Job ${job.id} started`
-  );
+  logger.info(`Resize Job ${job.id} started`);
 
   try {
-    // Update MongoDB when processing starts.
     await updateDatabaseJob(dbJobId, {
       $set: {
         status: "processing",
         progress: 0,
       },
-      $unset: {
-        error: 1,
-      },
+      $unset: { error: 1 },
     });
 
-    // Check cancellation before processing.
     await checkJobCancellation(job.id);
-
     validateSourceUrl(fileUrl);
 
     await job.updateProgress(20);
@@ -362,14 +358,10 @@ const processResizeJob = async (
     );
 
     const requestedFormat =
-      transformations?.format
-        ?.trim()
-        .toLowerCase() || "webp";
+      transformations?.format?.trim().toLowerCase() || "webp";
 
     const format =
-      requestedFormat === "jpg"
-        ? "jpeg"
-        : requestedFormat;
+      requestedFormat === "jpg" ? "jpeg" : requestedFormat;
 
     const allowedFormats = [
       "jpeg",
@@ -392,14 +384,14 @@ const processResizeJob = async (
 
     await checkJobCancellation(job.id);
 
+    // Apply the latest requested dimensions and quality.
     const transformation: ImageKitTransformation[] = [];
 
     if (width !== null || height !== null) {
-      const dimensionTransformation:
-        ImageKitTransformation = {
-          cropMode: "maintain_ratio",
-          focus: "auto",
-        };
+      const dimensionTransformation: ImageKitTransformation = {
+        cropMode: "maintain_ratio",
+        focus: "auto",
+      };
 
       if (width !== null) {
         dimensionTransformation.width = String(width);
@@ -415,7 +407,6 @@ const processResizeJob = async (
     transformation.push({
       quality: String(quality ?? 90),
       format,
-      effectSharpen: "10",
     });
 
     await job.updateProgress(60);
@@ -426,10 +417,15 @@ const processResizeJob = async (
 
     await checkJobCancellation(job.id);
 
+    // Generate a fresh URL using the selected source image.
     const resizedUrl = imagekit.url({
       src: fileUrl,
       transformation,
     });
+
+    // Calculate actual output size without interrupting resize.
+    const resizedFileSize =
+      await getTransformedFileSize(resizedUrl);
 
     await job.updateProgress(80);
 
@@ -443,23 +439,14 @@ const processResizeJob = async (
       success: true,
       fileId,
       url: resizedUrl,
-      fileName:
-        originalFileName ||
-        "processed-image.webp",
-      fileSize:
-        typeof originalSize === "number" &&
-        Number.isFinite(originalSize) &&
-        originalSize >= 0
-          ? originalSize
-          : 0,
+      fileName: originalFileName || "processed-image.webp",
+      fileSize: resizedFileSize,
       width,
       height,
     };
 
-    // Final cancellation check before completion.
     await checkJobCancellation(job.id);
 
-    // Save completed status and output in MongoDB.
     await updateDatabaseJob(dbJobId, {
       $set: {
         status: "completed",
@@ -476,9 +463,7 @@ const processResizeJob = async (
           },
         ],
       },
-      $unset: {
-        error: 1,
-      },
+      $unset: { error: 1 },
     });
 
     await recordToolUsage(job, {
@@ -490,17 +475,14 @@ const processResizeJob = async (
     await job.updateProgress(100);
 
     logger.info(
-      `✅ Resize Job ${job.id} finished successfully`
+      `Resize Job ${job.id} finished successfully. Output size: ${resizedFileSize} bytes`
     );
 
     return result;
   } catch (error: unknown) {
     logger.error(
-      {
-        err: error,
-        jobId: job.id,
-      },
-      "❌ Resize Job failed"
+      { err: error, jobId: job.id },
+      "Resize Job failed"
     );
 
     throw error;
@@ -515,7 +497,7 @@ export const resizeWorker = new Worker<
   ResizeJobData,
   ResizeJobResult
 >(
-  "meetools-resize-queue",
+  "meettools-resize-queue",
   processResizeJob,
   {
     connection: new IORedis(redisConnectionOptions),
@@ -528,15 +510,11 @@ export const resizeWorker = new Worker<
 // =====================================
 
 resizeWorker.on("ready", () => {
-  logger.info(
-    "✅ MeetTools Resize Worker connected to Redis."
-  );
+  logger.info("MeetTools Resize Worker connected to Redis.");
 });
 
 resizeWorker.on("completed", (job) => {
-  logger.info(
-    `🏁 Resize Job ${job.id} completed`
-  );
+  logger.info(`Resize Job ${job.id} completed`);
 });
 
 resizeWorker.on("failed", async (job, error) => {
@@ -545,52 +523,37 @@ resizeWorker.on("failed", async (job, error) => {
       err: error,
       jobId: job?.id ?? "unknown",
     },
-    "💥 Resize Job failed"
+    "Resize Job failed"
   );
 
-  if (!job?.data?.dbJobId) {
-    return;
-  }
+  if (!job?.data?.dbJobId) return;
 
-  const maxAttempts = Number(
-    job.opts.attempts ?? 1
-  );
+  const maxAttempts = Number(job.opts.attempts ?? 1);
 
-  // Wait until all BullMQ retries are exhausted.
   if (job.attemptsMade >= maxAttempts) {
-    const isCancelled =
-      error.message.includes("JOB_CANCELLED:");
+    const isCancelled = error.message.includes("JOB_CANCELLED:");
 
     try {
-      await updateDatabaseJob(
-        job.data.dbJobId,
-        {
-          $set: {
-            status: "failed",
-            error: {
-              message: isCancelled
-                ? "Job cancelled by user"
-                : error.message ||
-                  "Image processing failed",
-              code: isCancelled
-                ? "JOB_CANCELLED"
-                : "IMAGE_PROCESSING_FAILED",
-            },
+      await updateDatabaseJob(job.data.dbJobId, {
+        $set: {
+          status: "failed",
+          error: {
+            message: isCancelled
+              ? "Job cancelled by user"
+              : error.message || "Image processing failed",
+            code: isCancelled
+              ? "JOB_CANCELLED"
+              : "IMAGE_PROCESSING_FAILED",
           },
-        }
-      );
+        },
+      });
 
       if (isCancelled && job.id) {
-        await redis.del(
-          `meetools:cancel-resize:${job.id}`
-        );
+        await redis.del(`meettools:cancel-resize:${job.id}`);
       }
     } catch (dbError) {
       logger.error(
-        {
-          err: dbError,
-          jobId: job.id,
-        },
+        { err: dbError, jobId: job.id },
         "Failed to update MongoDB job status"
       );
     }
@@ -599,10 +562,8 @@ resizeWorker.on("failed", async (job, error) => {
 
 resizeWorker.on("error", (error) => {
   logger.error(
-    {
-      err: error,
-    },
-    "❌ Resize Worker error"
+    { err: error },
+    "Resize Worker error"
   );
 });
 
@@ -610,19 +571,12 @@ resizeWorker.on("error", (error) => {
 // Graceful Shutdown
 // =====================================
 
-export async function closeResizeWorker():
-  Promise<void> {
-  logger.info(
-    "🛑 Closing MeetTools Resize Worker..."
-  );
+export async function closeResizeWorker(): Promise<void> {
+  logger.info("Closing MeetTools Resize Worker...");
 
   await resizeWorker.close();
 
-  logger.info(
-    "✅ MeetTools Resize Worker closed successfully."
-  );
+  logger.info("MeetTools Resize Worker closed successfully.");
 }
 
-logger.info(
-  "🚀 MeetTools Resize Worker initialized."
-);
+logger.info("MeetTools Resize Worker initialized.");

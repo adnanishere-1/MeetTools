@@ -220,48 +220,33 @@ export default function DashboardPage() {
   };
 
   // Download an output file.
-  const handleDirectDownload = async (
-    url: string,
-    filename: string
-  ) => {
-    try {
-      const response = await fetch(url, {
-        credentials: "include",
-      });
+  // Download an output file directly from ImageKit.
+const handleDirectDownload = (
+  url: string,
+  filename: string
+) => {
+  if (!url) {
+    window.alert("Download URL is missing.");
+    return;
+  }
 
-      if (!response.ok) {
-        throw new Error(
-          `Download failed with status ${response.status}`
-        );
-      }
+  try {
+    const downloadUrl = new URL(url);
 
-      const blob = await response.blob();
+    const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
 
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
+    downloadUrl.searchParams.set("ik-attachment", "true");
+    downloadUrl.searchParams.set(
+      "ik-attachment-filename",
+      nameWithoutExtension || "downloaded-image"
+    );
 
-      link.href = blobUrl;
-      link.download = filename || "downloaded-image.jpg";
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(blobUrl);
-      }, 1000);
-    } catch (downloadError: unknown) {
-      console.error(
-        "Failed to download asset:",
-        downloadError
-      );
-
-      window.alert(
-        "Unable to download this file. Please try again."
-      );
-    }
-  };
-
+    window.location.href = downloadUrl.toString();
+  } catch (downloadError: unknown) {
+    console.error("Failed to download asset:", downloadError);
+    window.alert("Unable to download this file. Please try again.");
+  }
+};
   // Loading screen.
   if (loading) {
     return (
