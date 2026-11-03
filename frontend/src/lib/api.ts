@@ -40,8 +40,7 @@ const API = axios.create({
 // =====================================
 // Auth Scope Header
 // Admin pages use the admin session cookie,
-// all other pages use the user session cookie.
-// =====================================
+
 
 API.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
