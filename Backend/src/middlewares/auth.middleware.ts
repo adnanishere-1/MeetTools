@@ -1,3 +1,4 @@
+
 import type {
   Request,
   Response,
@@ -11,11 +12,6 @@ import { env } from "../config/env.js";
 import { User } from "../models/User.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { STATUS_CODES } from "../utils/statusCodes.js";
-import {
-  AUTH_COOKIE_NAMES,
-  getAuthScope,
-  type AuthScope,
-} from "../utils/authCookie.js";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -31,14 +27,9 @@ type TokenPayload = JwtPayload & {
   sub?: string;
 };
 
-const getCookieToken = (
-  req: Request,
-  scope: AuthScope
-): string | undefined => {
-  const cookieName = AUTH_COOKIE_NAMES[scope];
-
+const getCookieToken = (req: Request): string | undefined => {
   // Read cookie parsed by cookie-parser.
-  const parsedToken = req.cookies?.[cookieName];
+  const parsedToken = req.cookies?.meettools_token;
 
   if (
     typeof parsedToken === "string" &&
@@ -58,7 +49,7 @@ const getCookieToken = (
     .split(";")
     .map((cookie) => cookie.trim())
     .find((cookie) =>
-      cookie.startsWith(`${cookieName}=`)
+      cookie.startsWith("meettools_token=")
     );
 
   if (!tokenCookie) {
@@ -66,7 +57,7 @@ const getCookieToken = (
   }
 
   const rawValue = tokenCookie.slice(
-    cookieName.length + 1
+    "meettools_token=".length
   );
 
   try {
@@ -84,8 +75,7 @@ export const authenticate = async (
   try {
     req.user = undefined;
 
-    const scope = getAuthScope(req);
-    const cookieToken = getCookieToken(req, scope);
+    const cookieToken = getCookieToken(req);
 
     const authHeader = req.headers.authorization;
 
@@ -164,14 +154,6 @@ export const authenticate = async (
       throw new ApiError(
         STATUS_CODES.FORBIDDEN,
         "Account role is not permitted."
-      );
-    }
-
-    // The session scope must match the account role.
-    if (user.role !== scope) {
-      throw new ApiError(
-        STATUS_CODES.UNAUTHORIZED,
-        "Session does not match this area."
       );
     }
 
