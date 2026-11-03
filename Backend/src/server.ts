@@ -72,16 +72,55 @@ async function startServer(): Promise<void> {
 
     // 3. Import Express app after Redis is ready
     const appModule = await import("./app.js");
-    const app = (appModule as unknown as {
-      default?: import("express").Express;
-      app?: import("express").Express;
-    }).default ?? (appModule as unknown as {
-      app?: import("express").Express;
-    }).app;
 
-    if (!app) {
-      throw new Error("Express app export not found");
-    }
+// Handle ESM and CommonJS default-export wrappers.
+let candidate: unknown = appModule;
+
+for (let i = 0; i < 4; i++) {
+  if (
+    candidate &&
+    (typeof candidate === "function" ||
+      typeof candidate === "object") &&
+    "listen" in candidate &&
+    typeof (candidate as { listen?: unknown }).listen === "function"
+  ) {
+    break;
+  }
+
+  if (
+    candidate &&
+    typeof candidate === "object" &&
+    "default" in candidate
+  ) {
+    candidate = (candidate as { default: unknown }).default;
+    continue;
+  }
+
+  if (
+    candidate &&
+    typeof candidate === "object" &&
+    "app" in candidate
+  ) {
+    candidate = (candidate as { app: unknown }).app;
+    continue;
+  }
+
+  break;
+}
+
+if (
+  !candidate ||
+  (typeof candidate !== "function" &&
+    typeof candidate !== "object") ||
+  !("listen" in candidate) ||
+  typeof (candidate as { listen?: unknown }).listen !== "function"
+) {
+  throw new Error(
+    `Invalid Express app export. Module exports: ${Object.keys(appModule).join(", ")}`
+  );
+}
+
+const app = candidate as import("express").Express;
 
     // 4. Initialize BullMQ resize worker
     await import("./workers/resizeWorker.js");
