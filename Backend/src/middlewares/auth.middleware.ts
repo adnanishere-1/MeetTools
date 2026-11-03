@@ -1,4 +1,3 @@
-
 import type {
   Request,
   Response,
@@ -12,6 +11,11 @@ import { env } from "../config/env.js";
 import { User } from "../models/User.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { STATUS_CODES } from "../utils/statusCodes.js";
+import {
+  AUTH_COOKIE_NAMES,
+  getAuthScope,
+  type AuthScope,
+} from "../utils/authCookie.js";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -27,9 +31,14 @@ type TokenPayload = JwtPayload & {
   sub?: string;
 };
 
-const getCookieToken = (req: Request): string | undefined => {
+const getCookieToken = (
+  req: Request,
+  scope: AuthScope
+): string | undefined => {
+  const cookieName = AUTH_COOKIE_NAMES[scope];
+
   // Read cookie parsed by cookie-parser.
-  const parsedToken = req.cookies?.meettools_token;
+  const parsedToken = req.cookies?.[cookieName];
 
   if (
     typeof parsedToken === "string" &&
@@ -49,7 +58,7 @@ const getCookieToken = (req: Request): string | undefined => {
     .split(";")
     .map((cookie) => cookie.trim())
     .find((cookie) =>
-      cookie.startsWith("meettools_token=")
+      cookie.startsWith(`${cookieName}=`)
     );
 
   if (!tokenCookie) {
@@ -57,7 +66,7 @@ const getCookieToken = (req: Request): string | undefined => {
   }
 
   const rawValue = tokenCookie.slice(
-    "meettools_token=".length
+    cookieName.length + 1
   );
 
   try {
@@ -75,7 +84,8 @@ export const authenticate = async (
   try {
     req.user = undefined;
 
-    const cookieToken = getCookieToken(req);
+    const scope = getAuthScope(req);
+    const cookieToken = getCookieToken(req, scope);
 
     const authHeader = req.headers.authorization;
 
@@ -154,6 +164,14 @@ export const authenticate = async (
       throw new ApiError(
         STATUS_CODES.FORBIDDEN,
         "Account role is not permitted."
+      );
+    }
+
+    // The session scope must match the account role.
+    if (user.role !== scope) {
+      throw new ApiError(
+        STATUS_CODES.UNAUTHORIZED,
+        "Session does not match this area."
       );
     }
 

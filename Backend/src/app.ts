@@ -1,4 +1,3 @@
-
 import express, {
   type Application,
   type Request,
@@ -90,6 +89,7 @@ app.use(
       "Authorization",
       "Accept",
       "X-Requested-With",
+      "X-Auth-Scope",
     ],
 
     optionsSuccessStatus: 204,

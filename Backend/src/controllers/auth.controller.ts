@@ -10,6 +10,11 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { STATUS_CODES } from "../utils/statusCodes.js";
 import { sendEmail } from "../utils/email.js";
+import {
+  AUTH_COOKIE_NAMES,
+  AUTH_COOKIE_OPTIONS,
+  getAuthScope,
+} from "../utils/authCookie.js";
 
 // ==========================================
 // Types
@@ -39,22 +44,6 @@ interface OTPBody {
   email?: string;
   otp?: string;
 }
-
-// ==========================================
-// Authentication Cookie Configuration
-// ==========================================
-
-// Keep the cookie name and options identical for login and logout.
-// A successful login replaces the same cookie in this browser profile.
-const AUTH_COOKIE_NAME = "meettools_token";
-
-const AUTH_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-};
 
 // ==========================================
 // Helpers
@@ -612,10 +601,10 @@ export const login = asyncHandler(
       }
     );
 
-    // Setting the same cookie name/path replaces the previous
-    // account's token in this browser profile.
+    // Admin and user sessions use separate cookies, so logging in
+    // as one role does not replace the other role's session.
     res.cookie(
-      AUTH_COOKIE_NAME,
+      AUTH_COOKIE_NAMES[user.role],
       token,
       AUTH_COOKIE_OPTIONS
     );
@@ -648,11 +637,12 @@ export const login = asyncHandler(
 // ==========================================
 
 export const logout = asyncHandler(
-  async (_req: Request, res: Response) => {
-    // Use the same cookie name and matching scope/options
-    // as login so the browser removes the correct cookie.
+  async (req: Request, res: Response) => {
+    // Clear only the cookie of the area the request came from.
+    const scope = getAuthScope(req);
+
     res.clearCookie(
-      AUTH_COOKIE_NAME,
+      AUTH_COOKIE_NAMES[scope],
       {
         httpOnly: AUTH_COOKIE_OPTIONS.httpOnly,
         secure: AUTH_COOKIE_OPTIONS.secure,

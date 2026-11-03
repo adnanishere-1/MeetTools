@@ -37,4 +37,25 @@ const API = axios.create({
   },
 });
 
+// =====================================
+// Auth Scope Header
+// Admin pages use the admin session cookie,
+// all other pages use the user session cookie.
+// =====================================
+
+API.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const path = window.location.pathname;
+
+    const scope =
+      path === "/admin" || path.startsWith("/admin/")
+        ? "admin"
+        : "user";
+
+    config.headers.set("X-Auth-Scope", scope);
+  }
+
+  return config;
+});
+
 export default API;
