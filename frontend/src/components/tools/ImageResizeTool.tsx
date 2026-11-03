@@ -33,7 +33,7 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useImageResize } from "@/hooks/useImageResize";
-import axios from "axios";
+import API from "@/lib/api";
 import { toast } from "sonner";
 
 const upcomingToolsSections = [
@@ -147,15 +147,17 @@ export default function ImageResizeTool() {
 
     const fetchJobData = async () => {
       try {
-        const response = await axios.get(
-          `/api/v1/jobs/${encodeURIComponent(jobId)}`,
-          {
-            withCredentials: true,
-          }
+        // Use the configured API instance so production requests
+        // go to the backend API instead of the Vercel frontend.
+        const response = await API.get(
+          `/jobs/${encodeURIComponent(jobId)}`
         );
 
         const jobData: JobData =
-          response.data?.job || response.data;
+          response.data?.job ??
+          response.data?.data?.job ??
+          response.data?.data ??
+          response.data;
 
         // Prefer the latest resized output when reusing a job.
         // Use original input only if output is unavailable.
@@ -210,8 +212,10 @@ export default function ImageResizeTool() {
 
         setFile(originalFile);
         setPreviewImage(objectUrl);
-      } catch {
+      } catch (loadError) {
         if (cancelled) return;
+
+        console.error("Reuse image job loading failed:", loadError);
 
         toast.error("Unable to load image", {
           description: "Please try opening this job again.",
