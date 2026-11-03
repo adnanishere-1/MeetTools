@@ -56,7 +56,7 @@ async function waitForRedis(): Promise<void> {
 
 // =====================================
 // Start Server
-// =====================================
+
 
 async function startServer(): Promise<void> {
   try {
