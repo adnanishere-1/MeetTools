@@ -1,4 +1,3 @@
-
 import type {
   Request,
   Response,
@@ -25,11 +24,18 @@ type TokenPayload = JwtPayload & {
   id?: string;
   userId?: string;
   sub?: string;
+  role?: string;
 };
 
-const getCookieToken = (req: Request): string | undefined => {
+const ADMIN_COOKIE_NAME = "meettools_admin_token";
+const USER_COOKIE_NAME = "meettools_user_token";
+
+const readCookieValue = (
+  req: Request,
+  name: string
+): string | undefined => {
   // Read cookie parsed by cookie-parser.
-  const parsedToken = req.cookies?.meettools_token;
+  const parsedToken = req.cookies?.[name];
 
   if (
     typeof parsedToken === "string" &&
@@ -49,7 +55,7 @@ const getCookieToken = (req: Request): string | undefined => {
     .split(";")
     .map((cookie) => cookie.trim())
     .find((cookie) =>
-      cookie.startsWith("meettools_token=")
+      cookie.startsWith(`${name}=`)
     );
 
   if (!tokenCookie) {
@@ -57,7 +63,7 @@ const getCookieToken = (req: Request): string | undefined => {
   }
 
   const rawValue = tokenCookie.slice(
-    "meettools_token=".length
+    `${name}=`.length
   );
 
   try {
@@ -75,7 +81,34 @@ export const authenticate = async (
   try {
     req.user = undefined;
 
-    const cookieToken = getCookieToken(req);
+    // FIXED: Pick the cookie matching the active role sent
+    // by the frontend so both sessions can coexist.
+    const wantAdmin =
+      req.headers["x-active-role"] === "admin";
+
+    const adminToken = readCookieValue(
+      req,
+      ADMIN_COOKIE_NAME
+    );
+
+    const userToken = readCookieValue(
+      req,
+      USER_COOKIE_NAME
+    );
+
+    let cookieToken: string | undefined;
+    let expectedRole: "user" | "admin" | undefined;
+
+    if (wantAdmin && adminToken) {
+      cookieToken = adminToken;
+      expectedRole = "admin";
+    } else if (userToken) {
+      cookieToken = userToken;
+      expectedRole = "user";
+    } else if (adminToken) {
+      cookieToken = adminToken;
+      expectedRole = "admin";
+    }
 
     const authHeader = req.headers.authorization;
 
@@ -115,6 +148,18 @@ export const authenticate = async (
     }
 
     const payload = decoded as TokenPayload;
+
+    // FIXED: Make sure the token belongs to the session
+    // the frontend asked for.
+    if (
+      expectedRole &&
+      payload.role !== expectedRole
+    ) {
+      throw new ApiError(
+        STATUS_CODES.UNAUTHORIZED,
+        "Session mismatch. Please log in again."
+      );
+    }
 
     const userId =
       payload.id ?? payload.userId ?? payload.sub;

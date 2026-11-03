@@ -37,4 +37,22 @@ const API = axios.create({
   },
 });
 
+// FIXED: Tell the backend which session (admin or user) this
+// request belongs to, so the correct cookie is read when both
+// accounts are logged in on the same browser.
+API.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const pathname = window.location.pathname;
+
+    const isAdminArea =
+      pathname === "/admin" ||
+      pathname.startsWith("/admin/");
+
+    config.headers["X-Active-Role"] =
+      isAdminArea ? "admin" : "user";
+  }
+
+  return config;
+});
+
 export default API;

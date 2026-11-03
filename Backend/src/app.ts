@@ -1,4 +1,3 @@
-
 import express, {
   type Application,
   type Request,
@@ -90,6 +89,8 @@ app.use(
       "Authorization",
       "Accept",
       "X-Requested-With",
+      // FIXED: Role-selection header for dual sessions.
+      "X-Active-Role",
     ],
 
     optionsSuccessStatus: 204,
