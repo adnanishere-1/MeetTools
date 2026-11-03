@@ -41,6 +41,22 @@ interface OTPBody {
 }
 
 // ==========================================
+// Authentication Cookie Configuration
+// ==========================================
+
+// Keep the cookie name and options identical for login and logout.
+// A successful login replaces the same cookie in this browser profile.
+const AUTH_COOKIE_NAME = "meettools_token";
+
+const AUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+// ==========================================
 // Helpers
 // ==========================================
 
@@ -596,15 +612,13 @@ export const login = asyncHandler(
       }
     );
 
-    // HttpOnly authentication cookie
-    res.cookie("meettools_token", token, {
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // Setting the same cookie name/path replaces the previous
+    // account's token in this browser profile.
+    res.cookie(
+      AUTH_COOKIE_NAME,
+      token,
+      AUTH_COOKIE_OPTIONS
+    );
 
     // Login activity
     const clientIp = getClientIp(req);
@@ -635,13 +649,17 @@ export const login = asyncHandler(
 
 export const logout = asyncHandler(
   async (_req: Request, res: Response) => {
-    res.clearCookie("meettools_token", {
-      httpOnly: true,
-      secure:
-        process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-    });
+    // Use the same cookie name and matching scope/options
+    // as login so the browser removes the correct cookie.
+    res.clearCookie(
+      AUTH_COOKIE_NAME,
+      {
+        httpOnly: AUTH_COOKIE_OPTIONS.httpOnly,
+        secure: AUTH_COOKIE_OPTIONS.secure,
+        sameSite: AUTH_COOKIE_OPTIONS.sameSite,
+        path: AUTH_COOKIE_OPTIONS.path,
+      }
+    );
 
     return res
       .status(STATUS_CODES.OK)

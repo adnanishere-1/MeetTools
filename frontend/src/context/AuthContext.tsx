@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -86,6 +85,20 @@ const AuthContext = createContext<
   AuthContextType | undefined
 >(undefined);
 
+const AUTH_SYNC_KEY = "meettools_auth_sync";
+
+function notifyOtherTabsAboutAuthChange(): void {
+  try {
+    // Only a harmless change signal is stored. No token or user data is stored.
+    window.localStorage.setItem(
+      AUTH_SYNC_KEY,
+      String(Date.now())
+    );
+  } catch (error) {
+    console.warn("Unable to sync authentication across tabs:", error);
+  }
+}
+
 function getErrorMessage(
   error: unknown,
   fallback: string
@@ -168,7 +181,7 @@ export function AuthProvider({
     pathname.startsWith("/admin/");
 
   // ==================================
-  // Restore session
+  // Restore and verify session
   // ==================================
 
   const checkAuth =
@@ -187,23 +200,29 @@ export function AuthProvider({
           extractUser(response.data);
 
         setUser(currentUser);
+        setError(null);
 
         return currentUser;
       } catch (err: unknown) {
-        setUser(null);
-
+        // Clear the session only when the backend explicitly
+        // confirms that the current session is unauthorized.
         if (
-          !axios.isAxiosError(err) ||
-          err.response?.status !== 401
+          axios.isAxiosError(err) &&
+          err.response?.status === 401
         ) {
-          console.error(
-            "Session verification failed:",
-            getErrorMessage(
-              err,
-              "Unable to verify session"
-            )
-          );
+          setUser(null);
+          return null;
         }
+
+        // Network errors, timeouts and server errors must not
+        // incorrectly log out a user with an existing session.
+        console.error(
+          "Session verification failed:",
+          getErrorMessage(
+            err,
+            "Unable to verify session"
+          )
+        );
 
         return null;
       } finally {
@@ -236,6 +255,35 @@ export function AuthProvider({
 
     return () => {
       window.clearTimeout(timer);
+    };
+  }, [checkAuth]);
+
+  // ==================================
+  // Sync account changes across
+  // tabs and Chrome windows
+  // ==================================
+
+  useEffect(() => {
+    const handleStorageChange = (
+      event: StorageEvent
+    ) => {
+      if (event.key === AUTH_SYNC_KEY) {
+        // The cookie is shared by tabs on the same browser profile.
+        // Re-read /users/me so every open tab reflects the active account.
+        void checkAuth();
+      }
+    };
+
+    window.addEventListener(
+      "storage",
+      handleStorageChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "storage",
+        handleStorageChange
+      );
     };
   }, [checkAuth]);
 
@@ -297,6 +345,9 @@ export function AuthProvider({
 
       setUser(loggedInUser);
 
+      // Notify other tabs/windows that the shared cookie changed.
+      notifyOtherTabsAboutAuthChange();
+
       window.location.replace(
         getDashboardPath(loggedInUser.role)
       );
@@ -312,8 +363,8 @@ export function AuthProvider({
       );
 
       setError(message);
-      setUser(null);
 
+      // Do not clear an existing session when a login attempt fails.
       return {
         success: false,
         message,
@@ -509,6 +560,9 @@ export function AuthProvider({
         );
 
         setUser(null);
+
+        // Notify other tabs/windows that the shared session ended.
+        notifyOtherTabsAboutAuthChange();
 
         window.location.replace("/login");
       } catch (err: unknown) {

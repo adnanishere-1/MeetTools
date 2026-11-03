@@ -1,4 +1,3 @@
-
 import axios from "axios";
 
 // =====================================
@@ -31,7 +30,8 @@ if (
 const API = axios.create({
   baseURL: normalizedBaseURL,
   withCredentials: true,
-  timeout: 30000,
+  // Render free instances can take longer to respond after sleeping.
+  timeout: 60000,
   headers: {
     Accept: "application/json",
   },
