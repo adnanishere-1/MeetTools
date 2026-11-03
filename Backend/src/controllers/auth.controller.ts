@@ -44,15 +44,9 @@ interface OTPBody {
 // Authentication Cookie Configuration
 // ==========================================
 
-// FIXED: Each role gets its own cookie name so admin and user
-// sessions can coexist in the same browser. Logging in as one
-// role no longer overwrites the other role's session.
-const getAuthCookieName = (
-  role: "user" | "admin"
-): string =>
-  role === "admin"
-    ? "meettools_admin_token"
-    : "meettools_user_token";
+// Keep the cookie name and options identical for login and logout.
+// A successful login replaces the same cookie in this browser profile.
+const AUTH_COOKIE_NAME = "meettools_token";
 
 const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -618,10 +612,10 @@ export const login = asyncHandler(
       }
     );
 
-    // FIXED: Set a role-specific cookie so the other role's
-    // session in this browser is not replaced.
+    // Setting the same cookie name/path replaces the previous
+    // account's token in this browser profile.
     res.cookie(
-      getAuthCookieName(user.role),
+      AUTH_COOKIE_NAME,
       token,
       AUTH_COOKIE_OPTIONS
     );
@@ -654,16 +648,11 @@ export const login = asyncHandler(
 // ==========================================
 
 export const logout = asyncHandler(
-  async (req: Request, res: Response) => {
-    // FIXED: Clear only the active role's cookie so the
-    // other account (user/admin) stays logged in.
-    const activeRole: "user" | "admin" =
-      req.headers["x-active-role"] === "admin"
-        ? "admin"
-        : "user";
-
+  async (_req: Request, res: Response) => {
+    // Use the same cookie name and matching scope/options
+    // as login so the browser removes the correct cookie.
     res.clearCookie(
-      getAuthCookieName(activeRole),
+      AUTH_COOKIE_NAME,
       {
         httpOnly: AUTH_COOKIE_OPTIONS.httpOnly,
         secure: AUTH_COOKIE_OPTIONS.secure,
