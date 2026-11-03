@@ -11,7 +11,7 @@ import { redis } from "../config/redis.js";
 const createRedisStore = (prefix: string) =>
   new RedisStore({
     sendCommand: (...args: string[]) =>
-      redis.call(args[0]!, args.slice(1)) as Promise<number>,
+      redis.call(args[0]!, ...args.slice(1)) as Promise<any>,
     prefix,
   });
 
