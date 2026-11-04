@@ -6,9 +6,21 @@ import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "MeetTools - Next-Gen Image Processing",
+  metadataBase: new URL("https://www.meetools.online"),
+  title: {
+    default: "MeetTools - Free Online Image Resize & Processing Tools",
+    template: "%s | MeetTools",
+  },
   description:
-    "Batch image scaling, presets, and cloud media utilities",
+    "Resize, compress and clean images in bulk with free online tools. Batch image scaling, presets, and cloud media utilities.",
+  openGraph: {
+    title: "MeetTools - Free Online Image Processing Tools",
+    description:
+      "Batch image scaling, presets, and cloud media utilities.",
+    url: "https://www.meetools.online",
+    siteName: "MeetTools",
+    type: "website",
+  },
   icons: {
     icon: [
       {
