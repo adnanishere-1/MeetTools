@@ -36,11 +36,7 @@ router.use(isAdmin);
 // Admin Dashboard
 // =====================================
 
-/**
- * @desc    Get admin dashboard statistics
- * @route   GET /api/v1/admin/dashboard
- * @access  Private / Admin
- */
+
 router.get(
   "/dashboard",
   getDashboardStats
