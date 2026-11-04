@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { randomInt, timingSafeEqual } from "node:crypto";
 import disposableDomains from "disposable-email-domains";
-
+import type { AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 import { User } from "../models/User.model.js";
 import { ActivityLog } from "../models/ActivityLog.model.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -45,8 +45,9 @@ interface OTPBody {
 // ==========================================
 
 // Keep the cookie name and options identical for login and logout.
-// A successful login replaces the same cookie in this browser profile.
-const AUTH_COOKIE_NAME = "meettools_token";
+
+const USER_AUTH_COOKIE_NAME = "meettools_token";
+const ADMIN_AUTH_COOKIE_NAME = "meettools_admin_token";
 
 const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -54,6 +55,13 @@ const AUTH_COOKIE_OPTIONS = {
   sameSite: "lax" as const,
   path: "/",
   maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+const CLEAR_COOKIE_OPTIONS = {
+  httpOnly: AUTH_COOKIE_OPTIONS.httpOnly,
+  secure: AUTH_COOKIE_OPTIONS.secure,
+  sameSite: AUTH_COOKIE_OPTIONS.sameSite,
+  path: AUTH_COOKIE_OPTIONS.path,
 };
 
 // ==========================================
@@ -614,11 +622,18 @@ export const login = asyncHandler(
 
     // Setting the same cookie name/path replaces the previous
     // account's token in this browser profile.
-    res.cookie(
-      AUTH_COOKIE_NAME,
-      token,
-      AUTH_COOKIE_OPTIONS
-    );
+    
+const cookieName =
+  user.role === "admin"
+    ? ADMIN_AUTH_COOKIE_NAME
+    : USER_AUTH_COOKIE_NAME;
+
+res.cookie(
+  cookieName,
+  token,
+  AUTH_COOKIE_OPTIONS
+);
+
 
     // Login activity
     const clientIp = getClientIp(req);
@@ -647,25 +662,60 @@ export const login = asyncHandler(
 // Logout
 // ==========================================
 
+
 export const logout = asyncHandler(
   async (_req: Request, res: Response) => {
-    // Use the same cookie name and matching scope/options
-    // as login so the browser removes the correct cookie.
     res.clearCookie(
-      AUTH_COOKIE_NAME,
-      {
-        httpOnly: AUTH_COOKIE_OPTIONS.httpOnly,
-        secure: AUTH_COOKIE_OPTIONS.secure,
-        sameSite: AUTH_COOKIE_OPTIONS.sameSite,
-        path: AUTH_COOKIE_OPTIONS.path,
-      }
+      USER_AUTH_COOKIE_NAME,
+      CLEAR_COOKIE_OPTIONS
     );
 
-    return res
-      .status(STATUS_CODES.OK)
-      .json({
-        success: true,
-        message: "Logged out successfully",
-      });
+    return res.status(STATUS_CODES.OK).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  }
+);
+
+export const adminLogout = asyncHandler(
+  async (_req: Request, res: Response) => {
+    res.clearCookie(
+      ADMIN_AUTH_COOKIE_NAME,
+      CLEAR_COOKIE_OPTIONS
+    );
+
+    return res.status(STATUS_CODES.OK).json({
+      success: true,
+      message: "Admin logged out successfully",
+    });
+  }
+);
+// ==========================================
+export const getCurrentAdmin = asyncHandler(
+  async (req: Request, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+
+    if (!authReq.user?.id) {
+      throw new ApiError(
+        STATUS_CODES.UNAUTHORIZED,
+        "Admin authentication required."
+      );
+    }
+
+    const admin = await User.findById(
+      authReq.user.id
+    );
+
+    if (!admin || admin.role !== "admin") {
+      throw new ApiError(
+        STATUS_CODES.FORBIDDEN,
+        "Admin access required."
+      );
+    }
+
+    return res.status(STATUS_CODES.OK).json({
+      success: true,
+      user: getPublicUser(admin),
+    });
   }
 );

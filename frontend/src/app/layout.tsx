@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -13,18 +12,25 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/favicon.ico",
-        sizes: "16x16 32x32",
-        type: "image/x-icon",
+        url: "/images/favicon-96x96.png",
+        sizes: "96x96",
+        type: "image/png",
       },
       {
-        url: "/favicon.png",
+        url: "/images/favicon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+    shortcut: "/images/favicon.ico",
+    apple: [
+      {
+        url: "/images/apple-touch-icon.png",
+        sizes: "180x180",
         type: "image/png",
       },
     ],
-    shortcut: "/favicon.ico",
-    apple: "/favicon.png",
   },
+  manifest: "/images/site.webmanifest",
 };
 
 export default function RootLayout({
