@@ -18,33 +18,43 @@ export default function FaqSection({ items }: { items: FaqItem[] }) {
   };
 
   return (
-    <section className="max-w-3xl mx-auto px-6 py-12 w-full">
+    <section className="w-full bg-[#fff3ec] font-sans text-[#121212] py-16 px-6">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
       />
 
-      <h2 className="text-2xl md:text-3xl font-black text-[#121212] mb-6">
-        Frequently Asked Questions
-      </h2>
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-10">
+          <span className="inline-block px-3 py-1 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-[10px] font-bold uppercase tracking-widest mb-3">
+            FAQ
+          </span>
 
-      <div className="space-y-3">
-        {items.map((item) => (
-          <details
-            key={item.question}
-            className="group bg-white rounded-2xl border border-[#fb8500]/20 p-5"
-          >
-            <summary className="cursor-pointer font-bold text-[#121212] list-none flex justify-between items-center gap-4">
-              {item.question}
-              <span className="text-[#fb8500] text-xl group-open:rotate-45 transition-transform">
-                +
-              </span>
-            </summary>
-            <p className="mt-3 text-sm text-[#555555] leading-relaxed">
-              {item.answer}
-            </p>
-          </details>
-        ))}
+          <h2 className="text-3xl md:text-4xl font-black text-[#121212]">
+            Frequently Asked{" "}
+            <span className="text-[#fb8500]">Questions</span>
+          </h2>
+        </div>
+
+        <div className="space-y-3">
+          {items.map((item) => (
+            <details
+              key={item.question}
+              className="group bg-white rounded-2xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] open:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all p-5"
+            >
+              <summary className="cursor-pointer list-none flex justify-between items-center gap-4 font-bold text-[#121212] [&::-webkit-details-marker]:hidden">
+                <span>{item.question}</span>
+                <span className="text-[#fb8500] text-2xl leading-none group-open:rotate-45 transition-transform">
+                  +
+                </span>
+              </summary>
+
+              <p className="mt-3 text-sm text-[#555555] leading-relaxed">
+                {item.answer}
+              </p>
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   );
