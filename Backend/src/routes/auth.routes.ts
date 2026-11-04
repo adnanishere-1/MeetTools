@@ -7,8 +7,7 @@ import {
   resendOTP,
   login,
   logout,
-  getCurrentAdmin,
-  adminLogout,
+ 
 } from "../controllers/auth.controller.js";
 
 import { authenticate } from "../middlewares/auth.middleware.js";
@@ -73,14 +72,5 @@ router.post(
   logout
 );
 
-// Admin session verification
-router.get("/admin/me", authenticate, getCurrentAdmin);
-
-// Admin logout: clears only meettools_admin_token
-router.post(
-  "/admin/logout",
-  authenticate,
-  adminLogout
-);
 
 export default router;
