@@ -33,8 +33,7 @@ export const getDashboardStats = asyncHandler(
       createdAt: { $gte: oneMonthAgo },
     });
 
-    // Count the actual tool actions stored by
-    // ActivityLog.model.ts.
+    
     const toolActions = [
       "TOOL_USE",
       "IMAGE_RESIZE",
