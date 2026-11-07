@@ -20,6 +20,20 @@ export const metadata: Metadata = {
     url: "https://www.meetools.online",
     siteName: "MeetTools",
     type: "website",
+    images: [
+      {
+        url: "/images/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "MeetTools - Free Online Image Tools",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MeetTools - Free Online Image Tools",
+    description: "Resize, compress and convert images online for free.",
+    images: ["/images/og-image.png"],
   },
   icons: {
     icon: [
@@ -53,6 +67,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen flex flex-col justify-between bg-[#fff3ec] text-[#121212] font-sans">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "MeetTools",
+              url: "https://www.meetools.online",
+            }),
+          }}
+        />
+
         <AuthProvider>
           <div className="flex-1">{children}</div>
           <Footer />
