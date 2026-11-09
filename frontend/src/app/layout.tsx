@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "MeetTools - Free Online Image Tools",
     description: "Resize, compress and convert images online for free.",
-    images: ["/images/og-image.png"],
+    images: ["/images/favicon.ico"],
   },
   icons: {
     icon: [
