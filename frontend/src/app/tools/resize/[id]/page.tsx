@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import {
@@ -122,10 +122,10 @@ export default function MultiToolWorkspacePage() {
   const mounted = useRef(true);
   const busy = useRef(false);
 
+  const sourceUrl = jobData?.inputFiles?.[0]?.url;
+
   // Load original image aspect ratio
   useEffect(() => {
-    const sourceUrl = jobData?.inputFiles?.[0]?.url;
-
     if (!sourceUrl) return;
 
     const image = new Image();
@@ -157,7 +157,7 @@ export default function MultiToolWorkspacePage() {
     return () => {
       image.onload = null;
     };
-  }, [jobData?.inputFiles?.[0]?.url]);
+  }, [sourceUrl, maintainAspectRatio, width]);
 
   useEffect(() => {
     mounted.current = true;
@@ -295,7 +295,7 @@ export default function MultiToolWorkspacePage() {
   };
 
   // Poll backend job status
-  const pollJobStatus = (
+  const pollJobStatus = useCallback((
     backgroundJobId: string,
     version: number
   ) => {
@@ -369,7 +369,7 @@ export default function MultiToolWorkspacePage() {
     };
 
     pollTimer.current = setTimeout(check, 2000);
-  };
+  }, []);
 
   const handleToolSubmit = async (
     e: FormEvent<HTMLFormElement>

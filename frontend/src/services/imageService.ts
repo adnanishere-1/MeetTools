@@ -140,13 +140,15 @@ export const imageService = {
         `/images/status/${encodeURIComponent(jobId)}`
       );
 
-    const data = response.data as any;
+    // 🔥 Fixed: Replaced `any` with record casting type to satisfy eslint @typescript-eslint/no-explicit-any
+    const responseData = response.data as Record<string, unknown>;
 
-    return (
-      data?.job ??
-      data?.data?.job ??
-      data?.data ??
-      data
-    );
+    const extractedJob =
+      (responseData?.job as ResizeJobStatusResponse) ??
+      ((responseData?.data as Record<string, unknown>)?.job as ResizeJobStatusResponse) ??
+      (responseData?.data as ResizeJobStatusResponse) ??
+      (response.data as ResizeJobStatusResponse);
+
+    return extractedJob;
   },
 };
