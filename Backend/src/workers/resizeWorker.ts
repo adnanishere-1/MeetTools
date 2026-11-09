@@ -1,4 +1,3 @@
-
 import "dotenv/config";
 
 import mongoose from "mongoose";
@@ -29,6 +28,9 @@ interface ResizeTransformations {
   height?: number | string | null;
   quality?: number | string | null;
   format?: string;
+  maintainAspectRatio?: boolean;
+  maxSizeBytes?: number;
+  preserveResolution?: boolean;
 }
 
 interface ResizeJobData {
@@ -54,7 +56,7 @@ interface ResizeJobResult {
 type ImageKitTransformation = {
   width?: string;
   height?: string;
-  cropMode?: "maintain_ratio";
+  cropMode?: "maintain_ratio" | "force";
   focus?: "auto";
   quality?: string;
   format?: string;
@@ -231,6 +233,43 @@ function validateSourceUrl(fileUrl: string): void {
   }
 }
 
+function validateBoolean(
+  value: unknown,
+  defaultValue: boolean
+): boolean {
+  if (value === undefined || value === null) {
+    return defaultValue;
+  }
+
+  return value === true || value === "true";
+}
+
+function validateMaxSize(
+  value: unknown
+): number | null {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < 1 ||
+    parsed > 100 * 1024 * 1024
+  ) {
+    throw new Error(
+      "Target file size must be between 1 byte and 100 MB."
+    );
+  }
+
+  return parsed;
+}
+
 // =====================================
 // Save Successful Tool Usage
 // =====================================
@@ -303,6 +342,125 @@ async function recordToolUsage(
 }
 
 // =====================================
+// Build ImageKit Transformation URL
+// =====================================
+
+function buildTransformationUrl(
+  fileUrl: string,
+  width: number | null,
+  height: number | null,
+  quality: number,
+  format: string,
+  maintainAspectRatio: boolean
+): string {
+  const transformation: ImageKitTransformation[] = [];
+
+  if (width !== null || height !== null) {
+    const dimensionTransformation: ImageKitTransformation = {
+      cropMode: maintainAspectRatio
+        ? "maintain_ratio"
+        : "force",
+      focus: "auto",
+    };
+
+    if (width !== null) {
+      dimensionTransformation.width = String(width);
+    }
+
+    if (height !== null) {
+      dimensionTransformation.height = String(height);
+    }
+
+    transformation.push(dimensionTransformation);
+  }
+
+  transformation.push({
+    quality: String(quality),
+    format,
+  });
+
+  return imagekit.url({
+    src: fileUrl,
+    transformation,
+  });
+}
+
+// =====================================
+// Find Best Quality For Target Size (Optimized for Exact Target Match)
+// =====================================
+
+async function getBestOutput(
+  fileUrl: string,
+  width: number | null,
+  height: number | null,
+  requestedQuality: number,
+  format: string,
+  maintainAspectRatio: boolean,
+  maxSizeBytes: number | null
+): Promise<{
+  url: string;
+  fileSize: number;
+  quality: number;
+}> {
+  // No target size requested: use selected quality.
+  if (maxSizeBytes === null) {
+    const outputUrl = buildTransformationUrl(
+      fileUrl,
+      width,
+      height,
+      requestedQuality,
+      format,
+      maintainAspectRatio
+    );
+    const fileSize = await getTransformedFileSize(outputUrl);
+    return { url: outputUrl, fileSize, quality: requestedQuality };
+  }
+
+  let bestQuality = requestedQuality;
+  let bestUrl = "";
+  let bestSize = 0;
+  let closestValidUrl = "";
+  let closestValidSize = 0;
+  let closestValidQuality = 0;
+
+  // Check from high quality down to low quality in steps of 2 for fine accuracy
+  for (let q = 95; q >= 10; q -= 2) {
+    const testUrl = buildTransformationUrl(fileUrl, width, height, q, format, maintainAspectRatio);
+    const testSize = await getTransformedFileSize(testUrl);
+
+    if (testSize <= 0) continue;
+
+    bestQuality = q;
+    bestUrl = testUrl;
+    bestSize = testSize;
+
+    if (testSize <= maxSizeBytes) {
+      // Yeh size target ke andard hai, isay save kar lete hain
+      closestValidUrl = testUrl;
+      closestValidSize = testSize;
+      closestValidQuality = q;
+      
+      // Jaise hi target ke bilkul qareeb ya barabar aaye, loop rok dein taake mazeed chota na ho
+      break;
+    }
+  }
+
+  // Agar koi valid size target ke andar mil gaya hai
+  if (closestValidUrl) {
+    return { url: closestValidUrl, fileSize: closestValidSize, quality: closestValidQuality };
+  }
+
+  // Agar sabhi sizes target se bade hain, toh sabse choti quality wala return kar do
+  if (bestUrl) {
+    return { url: bestUrl, fileSize: bestSize, quality: bestQuality };
+  }
+
+  const fallbackUrl = buildTransformationUrl(fileUrl, width, height, requestedQuality, format, maintainAspectRatio);
+  const fallbackSize = await getTransformedFileSize(fallbackUrl);
+  return { url: fallbackUrl, fileSize: fallbackSize, quality: requestedQuality };
+}
+
+// =====================================
 // Process Resize Job
 // =====================================
 
@@ -361,7 +519,9 @@ const processResizeJob = async (
       transformations?.format?.trim().toLowerCase() || "webp";
 
     const format =
-      requestedFormat === "jpg" ? "jpeg" : requestedFormat;
+      requestedFormat === "jpg"
+        ? "jpeg"
+        : requestedFormat;
 
     const allowedFormats = [
       "jpeg",
@@ -376,6 +536,16 @@ const processResizeJob = async (
       );
     }
 
+    const maintainAspectRatio =
+      validateBoolean(
+        transformations?.maintainAspectRatio,
+        true
+      );
+
+    const maxSizeBytes = validateMaxSize(
+      transformations?.maxSizeBytes
+    );
+
     await job.updateProgress(40);
 
     await updateDatabaseJob(dbJobId, {
@@ -383,31 +553,6 @@ const processResizeJob = async (
     });
 
     await checkJobCancellation(job.id);
-
-    // Apply the latest requested dimensions and quality.
-    const transformation: ImageKitTransformation[] = [];
-
-    if (width !== null || height !== null) {
-      const dimensionTransformation: ImageKitTransformation = {
-        cropMode: "maintain_ratio",
-        focus: "auto",
-      };
-
-      if (width !== null) {
-        dimensionTransformation.width = String(width);
-      }
-
-      if (height !== null) {
-        dimensionTransformation.height = String(height);
-      }
-
-      transformation.push(dimensionTransformation);
-    }
-
-    transformation.push({
-      quality: String(quality ?? 90),
-      format,
-    });
 
     await job.updateProgress(60);
 
@@ -417,15 +562,19 @@ const processResizeJob = async (
 
     await checkJobCancellation(job.id);
 
-    // Generate a fresh URL using the selected source image.
-    const resizedUrl = imagekit.url({
-      src: fileUrl,
-      transformation,
-    });
+    // Generate output and adjust quality if target size is set.
+    const output = await getBestOutput(
+      fileUrl,
+      width,
+      height,
+      quality ?? 90,
+      format,
+      maintainAspectRatio,
+      maxSizeBytes
+    );
 
-    // Calculate actual output size without interrupting resize.
-    const resizedFileSize =
-      await getTransformedFileSize(resizedUrl);
+    const resizedUrl = output.url;
+    const resizedFileSize = output.fileSize;
 
     await job.updateProgress(80);
 
@@ -439,7 +588,8 @@ const processResizeJob = async (
       success: true,
       fileId,
       url: resizedUrl,
-      fileName: originalFileName || "processed-image.webp",
+      fileName:
+        originalFileName || "processed-image.webp",
       fileSize: resizedFileSize,
       width,
       height,
@@ -531,7 +681,9 @@ resizeWorker.on("failed", async (job, error) => {
   const maxAttempts = Number(job.opts.attempts ?? 1);
 
   if (job.attemptsMade >= maxAttempts) {
-    const isCancelled = error.message.includes("JOB_CANCELLED:");
+    const isCancelled = error.message.includes(
+      "JOB_CANCELLED:"
+    );
 
     try {
       await updateDatabaseJob(job.data.dbJobId, {
@@ -549,7 +701,9 @@ resizeWorker.on("failed", async (job, error) => {
       });
 
       if (isCancelled && job.id) {
-        await redis.del(`meettools:cancel-resize:${job.id}`);
+        await redis.del(
+          `meettools:cancel-resize:${job.id}`
+        );
       }
     } catch (dbError) {
       logger.error(
@@ -576,7 +730,9 @@ export async function closeResizeWorker(): Promise<void> {
 
   await resizeWorker.close();
 
-  logger.info("MeetTools Resize Worker closed successfully.");
+  logger.info(
+    "MeetTools Resize Worker closed successfully."
+  );
 }
 
 logger.info("MeetTools Resize Worker initialized.");

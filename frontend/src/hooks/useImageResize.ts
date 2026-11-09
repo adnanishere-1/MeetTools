@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -9,11 +8,17 @@ import {
 } from "react";
 
 import axios from "axios";
+import { toast } from "sonner"; // 👈 Sonner toast imported
 
 import {
   imageService,
-  type ResizeOptions,
+  type ResizeOptions as BaseResizeOptions,
 } from "../services/imageService";
+
+// 👇 Added targetKb property support to ResizeOptions interface
+export interface ResizeOptions extends BaseResizeOptions {
+  targetKb?: number;
+}
 
 type ResizeStatus =
   | "idle"
@@ -23,13 +28,100 @@ type ResizeStatus =
   | "failed";
 
 interface JobResult {
-  status: string;
+  status?: string; // 👈 Made optional to fix TypeScript type mismatch with service response
   jobId?: string;
   failedReason?: string;
   [key: string]: unknown;
 }
 
+interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
 const POLLING_INTERVAL = 2000;
+
+// Get original image dimensions
+function getImageDimensions(file: File): Promise<ImageDimensions> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      const dimensions = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
+
+      URL.revokeObjectURL(objectUrl);
+      resolve(dimensions);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Unable to read image dimensions."));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+// Calculate dimensions while maintaining aspect ratio
+async function getResizeOptions(
+  file: File,
+  options: ResizeOptions
+): Promise<ResizeOptions> {
+  if (options.maintainAspectRatio === false) {
+    return options;
+  }
+
+  const hasWidth =
+    options.width !== undefined &&
+    Number.isFinite(options.width) &&
+    options.width > 0;
+
+  const hasHeight =
+    options.height !== undefined &&
+    Number.isFinite(options.height) &&
+    options.height > 0;
+
+  // No dimensions provided
+  if (!hasWidth && !hasHeight) {
+    return {
+      ...options,
+      maintainAspectRatio: true,
+    };
+  }
+
+  const original = await getImageDimensions(file);
+
+  const aspectRatio = original.width / original.height;
+
+  let width = options.width;
+  let height = options.height;
+
+  // Width is provided: calculate height automatically
+  if (hasWidth && !hasHeight) {
+    height = Math.round(width! / aspectRatio);
+  }
+
+  // Height is provided: calculate width automatically
+  else if (!hasWidth && hasHeight) {
+    width = Math.round(height! * aspectRatio);
+  }
+
+  // Both are provided: keep width and calculate matching height
+  else if (hasWidth && hasHeight) {
+    height = Math.round(width! / aspectRatio);
+  }
+
+  return {
+    ...options,
+    width,
+    height,
+    maintainAspectRatio: true,
+  };
+}
 
 function getErrorMessage(
   error: unknown,
@@ -104,10 +196,10 @@ export function useImageResize() {
         }
 
         try {
-          const data: JobResult =
-            await imageService.checkJobStatus(jobId);
+          const rawData = await imageService.checkJobStatus(jobId);
+          const data = rawData as JobResult; // 👈 Safely mapped to JobResult to resolve data type issue
 
-          // Ignore results from an outdated request
+          // Ignore outdated requests
           if (
             !mountedRef.current ||
             requestId !== requestIdRef.current
@@ -134,16 +226,22 @@ export function useImageResize() {
           if (data.status === "failed") {
             stopPolling();
 
-            setError(
+            const failMsg =
               data.failedReason ||
-                "Image processing failed"
-            );
+              "Image processing failed.";
 
+            setError(failMsg);
             setStatus("failed");
             setLoading(false);
+
             setProgressMessage(
               "Image processing failed."
             );
+
+            // 🔥 Sonner Toast for Job Failure
+            toast.error("Image processing failed", {
+              description: failMsg,
+            });
 
             busyRef.current = false;
             return;
@@ -153,13 +251,12 @@ export function useImageResize() {
 
           setProgressMessage(
             data.status === "waiting" ||
-            data.status === "queued"
+              data.status === "queued"
               ? "Image queued. Waiting for background worker..."
               : "Background worker is processing your image..."
           );
 
-          // Schedule the next check only after
-          // the current request finishes.
+          // Schedule next check after current request finishes
           timerRef.current = setTimeout(
             checkStatus,
             POLLING_INTERVAL
@@ -176,15 +273,21 @@ export function useImageResize() {
 
           const message = getErrorMessage(
             err,
-            "Error checking job status"
+            "Error checking job status."
           );
 
           setError(message);
           setStatus("failed");
           setLoading(false);
+
           setProgressMessage(
             "Unable to check image processing status."
           );
+
+          // 🔥 Sonner Toast for Polling Error
+          toast.error("Status check failed", {
+            description: message,
+          });
 
           busyRef.current = false;
         }
@@ -211,14 +314,16 @@ export function useImageResize() {
       }
 
       if (!file) {
-        setError("Please select an image first.");
+        const errMsg = "Please select an image first.";
+        setError(errMsg);
         setStatus("failed");
+        toast.warning(errMsg);
         return;
       }
 
       busyRef.current = true;
 
-      // Invalidate any previous polling request
+      // Invalidate previous polling request
       requestIdRef.current += 1;
 
       const requestId = requestIdRef.current;
@@ -231,14 +336,31 @@ export function useImageResize() {
       setResult(null);
 
       setProgressMessage(
-        "Uploading image and queuing job..."
+        "Reading image dimensions..."
       );
 
       try {
+        // Calculate missing dimension automatically
+        const finalOptions = await getResizeOptions(
+          file,
+          options
+        );
+
+        if (
+          !mountedRef.current ||
+          requestId !== requestIdRef.current
+        ) {
+          return;
+        }
+
+        setProgressMessage(
+          "Uploading image and queuing job..."
+        );
+
         const response =
           await imageService.resizeImage(
             file,
-            options
+            finalOptions
           );
 
         if (
@@ -272,9 +394,31 @@ export function useImageResize() {
           return;
         }
 
+        // 🔥 RATE LIMIT (429) & GENERAL ERROR HANDLING FOR SONNER TOAST
+        if (axios.isAxiosError(err)) {
+          const status = err.response?.status;
+          const serverMessage =
+            err.response?.data?.error?.message ||
+            err.response?.data?.message ||
+            err.response?.data?.error;
+
+          if (status === 429) {
+            toast.error("Too Many Requests", {
+              description:
+                serverMessage ||
+                "You have reached your request limit. Please try again later.",
+            });
+            setError("Rate limit reached");
+            setStatus("failed");
+            setLoading(false);
+            busyRef.current = false;
+            return;
+          }
+        }
+
         const message = getErrorMessage(
           err,
-          "Failed to upload image"
+          "Failed to upload or process image."
         );
 
         setError(message);
@@ -285,13 +429,18 @@ export function useImageResize() {
           "Image upload or processing request failed."
         );
 
+        // 🔥 Sonner Toast for Request Failure
+        toast.error("Operation failed", {
+          description: message,
+        });
+
         busyRef.current = false;
       }
     },
     [pollJobStatus, stopPolling]
   );
 
-  // Reset the hook to its initial state
+  // Reset hook to initial state
   const resetResize = useCallback(() => {
     requestIdRef.current += 1;
 

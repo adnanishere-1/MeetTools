@@ -181,6 +181,28 @@ function parsePreserveResolution(
   );
 }
 
+// Maintain aspect ratio
+function parseMaintainAspectRatio(
+  value: unknown
+): boolean {
+  if (value === undefined) {
+    return true;
+  }
+
+  if (value === true || value === "true") {
+    return true;
+  }
+
+  if (value === false || value === "false") {
+    return false;
+  }
+
+  throw new ApiError(
+    STATUS_CODES.BAD_REQUEST,
+    "maintainAspectRatio must be true or false"
+  );
+}
+
 function parseTargetSize(
   kb: unknown,
   mb: unknown
@@ -389,6 +411,11 @@ async function queueImageProcessing(
   const quality = parseQuality(body.quality);
   const format = parseFormat(body.format);
 
+  const maintainAspectRatio =
+    parseMaintainAspectRatio(
+      body.maintainAspectRatio
+    );
+
   const preserveResolution =
     config.includeCompressionOptions
       ? parsePreserveResolution(
@@ -404,13 +431,21 @@ async function queueImageProcessing(
         )
       : undefined;
 
+  // 🛑 Prevent target size greater than original image size (upscaling prevention)
+  if (maxSizeBytes !== undefined && maxSizeBytes > file.size) {
+    throw new ApiError(
+      STATUS_CODES.BAD_REQUEST,
+      `Target size cannot exceed original image size (${Math.round(file.size / 1024)} KB).`
+    );
+  }
+
   const limitCheck =
     await checkAndIncrementDailyLimit(identifier);
 
   if (!limitCheck.allowed) {
     throw new ApiError(
       STATUS_CODES.TOO_MANY_REQUESTS,
-      "You have reached your daily limit of 15 images. Please try again after 24 hours."
+      `You have reached your daily limit of ${DAILY_LIMIT} images. Please try again after 24 hours.`
     );
   }
 
@@ -450,7 +485,7 @@ async function queueImageProcessing(
         height,
         outputFormat: format,
         quality,
-        maintainAspectRatio: true,
+        maintainAspectRatio,
       },
     });
 
@@ -471,6 +506,7 @@ async function queueImageProcessing(
           height,
           quality,
           format,
+          maintainAspectRatio,
 
           ...(config.includeCompressionOptions
             ? {

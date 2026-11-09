@@ -51,6 +51,7 @@ export default function Navbar() {
         {/* Continuous Rotating Processing Badge + Brand Logo */}
         <Link
           href={isAdmin ? "/admin/dashboard" : "/"}
+          aria-label="MeetTools home"
           className="flex items-center gap-3 group"
         >
           <svg

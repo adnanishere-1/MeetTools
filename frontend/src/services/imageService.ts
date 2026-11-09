@@ -1,21 +1,22 @@
-
 import axios from "axios";
 
-// Direct Express backend URL
-// Development: http://localhost:5000
-// Production: configure NEXT_PUBLIC_API_URL
+// Backend API URL
 const BACKEND_URL = (
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/api/v1"
-).replace(/\/$/, "");
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:5000/api/v1"
+    : "")
+).replace(/\/+$/, "");
 
-// Image resize options
+// Image resize options matching original configuration
 export interface ResizeOptions {
   width?: number;
   height?: number;
   quality?: number;
   format?: "jpeg" | "png" | "webp" | "avif";
-  targetFileSizeKB?: number;
+  maintainAspectRatio?: boolean;
+  targetKb?: number;           // 👈 Supports frontend state
+  targetFileSizeKB?: number;   // 👈 Supports original backend option
   targetFileSizeMB?: number;
   preserveResolution?: boolean;
 }
@@ -30,23 +31,21 @@ export interface ResizeJobResponse {
 
 export interface ResizeJobStatusResponse {
   jobId?: string;
-  status: string;
+  status?: string;
   failedReason?: string;
   result?: unknown;
+  job?: unknown;
   [key: string]: unknown;
 }
 
-// Axios instance for image processing API
+// Axios instance
 const imageAPI = axios.create({
   baseURL: BACKEND_URL,
-
-  // Send HttpOnly authentication cookies
   withCredentials: true,
-
   timeout: 60000,
 });
 
-// Add an option only when it has a valid value
+// Validate and append numeric values
 function appendNumberOption(
   formData: FormData,
   key: string,
@@ -55,14 +54,15 @@ function appendNumberOption(
   if (
     value !== undefined &&
     value !== null &&
-    Number.isFinite(value)
+    Number.isFinite(value) &&
+    value > 0
   ) {
     formData.append(key, String(value));
   }
 }
 
 export const imageService = {
-  // Upload image and create a processing job
+  // Upload image and create resize job
   resizeImage: async (
     file: File,
     options: ResizeOptions
@@ -71,38 +71,33 @@ export const imageService = {
       throw new Error("Please select an image.");
     }
 
+    if (!BACKEND_URL) {
+      throw new Error(
+        "Backend API URL is missing. Please configure NEXT_PUBLIC_API_URL."
+      );
+    }
+
     const formData = new FormData();
 
-    // Matches Multer upload.single("image")
     formData.append("image", file);
 
-    appendNumberOption(
-      formData,
-      "width",
-      options.width
-    );
-
-    appendNumberOption(
-      formData,
-      "height",
-      options.height
-    );
-
-    appendNumberOption(
-      formData,
-      "quality",
-      options.quality
-    );
+    appendNumberOption(formData, "width", options.width);
+    appendNumberOption(formData, "height", options.height);
+    appendNumberOption(formData, "quality", options.quality);
 
     if (options.format) {
       formData.append("format", options.format);
     }
 
-    appendNumberOption(
-      formData,
-      "targetFileSizeKB",
-      options.targetFileSizeKB
+    // Aspect ratio setting
+    formData.append(
+      "maintainAspectRatio",
+      String(options.maintainAspectRatio ?? true)
     );
+
+    // Target output file size (Handles both targetKb and targetFileSizeKB seamlessly)
+    const targetKbValue = options.targetKb ?? options.targetFileSizeKB;
+    appendNumberOption(formData, "targetFileSizeKB", targetKbValue);
 
     appendNumberOption(
       formData,
@@ -110,9 +105,7 @@ export const imageService = {
       options.targetFileSizeMB
     );
 
-    if (
-      options.preserveResolution !== undefined
-    ) {
+    if (options.preserveResolution !== undefined) {
       formData.append(
         "preserveResolution",
         String(options.preserveResolution)
@@ -128,7 +121,7 @@ export const imageService = {
     return response.data;
   },
 
-  // Check background BullMQ job status
+  // Check background job status
   checkJobStatus: async (
     jobId: string
   ): Promise<ResizeJobStatusResponse> => {
@@ -136,11 +129,24 @@ export const imageService = {
       throw new Error("Job ID is required.");
     }
 
+    if (!BACKEND_URL) {
+      throw new Error(
+        "Backend API URL is missing. Please configure NEXT_PUBLIC_API_URL."
+      );
+    }
+
     const response =
       await imageAPI.get<ResizeJobStatusResponse>(
         `/images/status/${encodeURIComponent(jobId)}`
       );
 
-    return response.data;
+    const data = response.data as any;
+
+    return (
+      data?.job ??
+      data?.data?.job ??
+      data?.data ??
+      data
+    );
   },
 };

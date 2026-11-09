@@ -1,4 +1,3 @@
-
 import {
   Worker,
   type Job as BullJob,
@@ -15,6 +14,9 @@ interface ImageTransformations {
   height?: number | string;
   quality?: number | string;
   format?: string;
+  maintainAspectRatio?: boolean;
+  maxSizeBytes?: number;
+  preserveResolution?: boolean;
 }
 
 interface ImageJobData {
@@ -42,6 +44,14 @@ interface ImageKitTransformation {
   height?: string;
   quality?: string;
   format?: string;
+  crop?: string;
+}
+
+interface ProcessedImage {
+  url: string;
+  fileSize: number;
+  width?: number;
+  height?: number;
 }
 
 // Validate dimensions and quality
@@ -75,7 +85,10 @@ function validatePositiveInteger(
 
 // Build ImageKit transformations
 function buildTransformations(
-  transformations?: ImageTransformations
+  transformations?: ImageTransformations,
+  qualityOverride?: number,
+  widthOverride?: number,
+  heightOverride?: number
 ): ImageKitTransformation[] {
   if (!transformations) {
     return [];
@@ -84,19 +97,19 @@ function buildTransformations(
   const result: ImageKitTransformation[] = [];
 
   const width = validatePositiveInteger(
-    transformations.width,
+    widthOverride ?? transformations.width,
     "width",
     10000
   );
 
   const height = validatePositiveInteger(
-    transformations.height,
+    heightOverride ?? transformations.height,
     "height",
     10000
   );
 
   const quality = validatePositiveInteger(
-    transformations.quality,
+    qualityOverride ?? transformations.quality,
     "quality",
     100
   );
@@ -130,6 +143,13 @@ function buildTransformations(
 
     result.push({
       format: normalizedFormat,
+    });
+  }
+
+  // Preserve the complete image without cropping.
+  if (transformations.maintainAspectRatio !== false) {
+    result.push({
+      crop: "at_max",
     });
   }
 
@@ -173,6 +193,137 @@ function validateImageJob(
   }
 }
 
+// Get actual transformed image size
+async function getImageSize(url: string): Promise<number> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `ImageKit transformation failed: ${response.status}`
+    );
+  }
+
+  const buffer = await response.arrayBuffer();
+
+  return buffer.byteLength;
+}
+
+// Generate transformed URL and measure its actual size
+async function createProcessedImage(
+  fileUrl: string,
+  transformations: ImageTransformations
+): Promise<ProcessedImage> {
+  const targetSize = transformations.maxSizeBytes;
+
+  const originalWidth = Number(transformations.width);
+  const originalHeight = Number(transformations.height);
+
+  let width = originalWidth || undefined;
+  let height = originalHeight || undefined;
+
+  let quality = Math.min(
+    Math.max(Number(transformations.quality) || 90, 10),
+    100
+  );
+
+  const targetEnabled =
+    typeof targetSize === "number" &&
+    Number.isFinite(targetSize) &&
+    targetSize > 0;
+
+  const maxAttempts = targetEnabled ? 20 : 1;
+
+  let finalUrl = fileUrl;
+  let finalSize = 0;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const transformArray = buildTransformations(
+      transformations,
+      quality,
+      width,
+      height
+    );
+
+    finalUrl =
+      transformArray.length > 0
+        ? imagekit.url({
+            src: fileUrl,
+            transformation: transformArray,
+          })
+        : fileUrl;
+
+    finalSize = await getImageSize(finalUrl);
+
+    if (!targetEnabled || finalSize <= targetSize!) {
+      break;
+    }
+
+    if (quality > 10) {
+      quality = Math.max(10, quality - 10);
+      continue;
+    }
+
+    // Reduce dimensions proportionally when quality
+    // adjustment alone cannot reach the target size.
+    if (
+      transformations.preserveResolution === true
+    ) {
+      throw new Error(
+        "Target file size cannot be reached without reducing image resolution."
+      );
+    }
+
+    if (width && height) {
+      const scale = Math.sqrt(
+        targetSize! / finalSize
+      ) * 0.95;
+
+      width = Math.max(
+        1,
+        Math.floor(width * scale)
+      );
+
+      height = Math.max(
+        1,
+        Math.floor(height * scale)
+      );
+    } else if (width) {
+      width = Math.max(
+        1,
+        Math.floor(
+          width * Math.sqrt(targetSize! / finalSize) * 0.95
+        )
+      );
+    } else if (height) {
+      height = Math.max(
+        1,
+        Math.floor(
+          height * Math.sqrt(targetSize! / finalSize) * 0.95
+        )
+      );
+    } else {
+      throw new Error(
+        "Target file size requires image dimensions."
+      );
+    }
+
+    quality = 10;
+  }
+
+  if (targetEnabled && finalSize > targetSize!) {
+    throw new Error(
+      "Unable to reach the requested target file size."
+    );
+  }
+
+  return {
+    url: finalUrl,
+    fileSize: finalSize,
+    ...(width !== undefined ? { width } : {}),
+    ...(height !== undefined ? { height } : {}),
+  };
+}
+
 // Process image job
 const processImageJob = async (
   job: BullJob<ImageJobData, ImageJobResult>
@@ -183,7 +334,6 @@ const processImageJob = async (
     fileId,
     fileUrl,
     originalFileName,
-    originalSize,
     transformations,
   } = job.data;
 
@@ -211,37 +361,27 @@ const processImageJob = async (
 
     await job.updateProgress(20);
 
-    const transformArray =
-      buildTransformations(transformations);
-
-    await job.updateProgress(50);
-
-    let finalOutputUrl = fileUrl;
-
-    if (transformArray.length > 0) {
-      finalOutputUrl = imagekit.url({
-        src: fileUrl,
-        transformation: transformArray,
-      });
-    }
+    const processedImage = await createProcessedImage(
+      fileUrl,
+      transformations || {}
+    );
 
     await job.updateProgress(80);
 
     const result: ImageJobResult = {
       success: true,
-      url: finalOutputUrl,
+      url: processedImage.url,
       fileId,
       fileName: originalFileName || "resized-image",
-      fileSize: originalSize || 0,
-      ...(transformations?.width
-        ? { width: Number(transformations.width) }
+      fileSize: processedImage.fileSize,
+      ...(processedImage.width !== undefined
+        ? { width: processedImage.width }
         : {}),
-      ...(transformations?.height
-        ? { height: Number(transformations.height) }
+      ...(processedImage.height !== undefined
+        ? { height: processedImage.height }
         : {}),
     };
 
-    // Save output file in MongoDB
     await Job.findByIdAndUpdate(dbJobId, {
       $set: {
         status: "completed",
@@ -249,9 +389,9 @@ const processImageJob = async (
         outputFiles: [
           {
             fileId: fileId || "",
-            url: finalOutputUrl,
+            url: processedImage.url,
             fileName: result.fileName,
-            fileSize: result.fileSize,
+            fileSize: processedImage.fileSize,
             ...(result.width !== undefined
               ? { width: result.width }
               : {}),
@@ -304,7 +444,6 @@ const processImageJob = async (
 };
 
 // Initialize Worker
-// IMPORTANT: This name MUST match the Queue name in the controller.
 export const imageWorker = new Worker<
   ImageJobData,
   ImageJobResult

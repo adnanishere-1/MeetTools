@@ -28,10 +28,7 @@ import axios from "axios";
 import { imageService, type ResizeOptions } from "@/services/imageService";
 import { fetchJobById } from "@/services/jobService";
 
-// ─────────────────────────────────────────────────────────────
-// 🛠️ UPCOMING TOOLS DATA — Section wise (display only, no action)
-// ─────────────────────────────────────────────────────────────
-
+// UPCOMING TOOLS DATA
 const upcomingToolsSections = [
   {
     sectionTitle: "PDF Tools",
@@ -86,9 +83,11 @@ type OutputFormat = NonNullable<ResizeOptions["format"]>;
 
 function getMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.error?.message ||
+    return (
+      error.response?.data?.error?.message ||
       error.response?.data?.message ||
-      fallback;
+      fallback
+    );
   }
 
   return error instanceof Error ? error.message : fallback;
@@ -103,10 +102,17 @@ export default function MultiToolWorkspacePage() {
   const [jobData, setJobData] = useState<StoredJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState("resize");
+
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
+
   const [format, setFormat] = useState<OutputFormat>("webp");
   const [quality, setQuality] = useState("90");
+
+  // Aspect ratio functionality
+  const [maintainAspectRatio, setMaintainAspectRatio] = useState(true);
+  const aspectRatioRef = useRef<number | null>(null);
+
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState("");
@@ -115,6 +121,43 @@ export default function MultiToolWorkspacePage() {
   const requestVersion = useRef(0);
   const mounted = useRef(true);
   const busy = useRef(false);
+
+  // Load original image aspect ratio
+  useEffect(() => {
+    const sourceUrl = jobData?.inputFiles?.[0]?.url;
+
+    if (!sourceUrl) return;
+
+    const image = new Image();
+
+    image.onload = () => {
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        aspectRatioRef.current =
+          image.naturalWidth / image.naturalHeight;
+
+        // Recalculate height from existing width when ratio is enabled
+        if (maintainAspectRatio && width.trim()) {
+          const parsedWidth = Number(width);
+
+          if (Number.isFinite(parsedWidth) && parsedWidth > 0) {
+            setHeight(
+              String(
+                Math.round(
+                  parsedWidth / aspectRatioRef.current
+                )
+              )
+            );
+          }
+        }
+      }
+    };
+
+    image.src = sourceUrl;
+
+    return () => {
+      image.onload = null;
+    };
+  }, [jobData?.inputFiles?.[0]?.url]);
 
   useEffect(() => {
     mounted.current = true;
@@ -140,7 +183,6 @@ export default function MultiToolWorkspacePage() {
       }
 
       try {
-        // Cookie-based authentication is handled by jobService.
         const response = await fetchJobById(jobId);
 
         if (cancelled) return;
@@ -210,14 +252,61 @@ export default function MultiToolWorkspacePage() {
     };
   }, [jobId]);
 
-  const pollJobStatus = (backgroundJobId: string, version: number) => {
+  // Width change: calculate height automatically
+  const handleWidthChange = (value: string) => {
+    setWidth(value);
+
+    if (!maintainAspectRatio || !aspectRatioRef.current) {
+      return;
+    }
+
+    const parsedWidth = Number(value);
+
+    if (value.trim() && Number.isFinite(parsedWidth) && parsedWidth > 0) {
+      setHeight(
+        String(
+          Math.round(parsedWidth / aspectRatioRef.current)
+        )
+      );
+    } else if (!value.trim()) {
+      setHeight("");
+    }
+  };
+
+  // Height change: calculate width automatically
+  const handleHeightChange = (value: string) => {
+    setHeight(value);
+
+    if (!maintainAspectRatio || !aspectRatioRef.current) {
+      return;
+    }
+
+    const parsedHeight = Number(value);
+
+    if (value.trim() && Number.isFinite(parsedHeight) && parsedHeight > 0) {
+      setWidth(
+        String(
+          Math.round(parsedHeight * aspectRatioRef.current)
+        )
+      );
+    } else if (!value.trim()) {
+      setWidth("");
+    }
+  };
+
+  // Poll backend job status
+  const pollJobStatus = (
+    backgroundJobId: string,
+    version: number
+  ) => {
     const check = async () => {
       if (!mounted.current || requestVersion.current !== version) {
         return;
       }
 
       try {
-        const data = await imageService.checkJobStatus(backgroundJobId);
+        const data =
+          await imageService.checkJobStatus(backgroundJobId);
 
         if (!mounted.current || requestVersion.current !== version) {
           return;
@@ -244,11 +333,13 @@ export default function MultiToolWorkspacePage() {
           }
 
           setResultUrl(url);
+
           setDownloadName(
             output.fileDetails?.fileName ||
             output.result?.fileDetails?.fileName ||
             null
           );
+
           setProgressMessage("Processing completed successfully.");
           setProcessing(false);
           busy.current = false;
@@ -264,6 +355,7 @@ export default function MultiToolWorkspacePage() {
         setProgressMessage(
           "Background worker is processing your image..."
         );
+
         pollTimer.current = setTimeout(check, 2000);
       } catch (err: unknown) {
         if (!mounted.current || requestVersion.current !== version) {
@@ -279,7 +371,9 @@ export default function MultiToolWorkspacePage() {
     pollTimer.current = setTimeout(check, 2000);
   };
 
-  const handleToolSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleToolSubmit = async (
+    e: FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
 
     if (activeTool !== "resize" || busy.current) return;
@@ -291,8 +385,8 @@ export default function MultiToolWorkspacePage() {
       return;
     }
 
-    const parsedWidth = width.trim() ? Number(width) : undefined;
-    const parsedHeight = height.trim() ? Number(height) : undefined;
+    let parsedWidth = width.trim() ? Number(width) : undefined;
+    let parsedHeight = height.trim() ? Number(height) : undefined;
 
     if (
       [parsedWidth, parsedHeight].some(
@@ -307,6 +401,7 @@ export default function MultiToolWorkspacePage() {
 
     busy.current = true;
     requestVersion.current += 1;
+
     const version = requestVersion.current;
 
     if (pollTimer.current) {
@@ -340,9 +435,60 @@ export default function MultiToolWorkspacePage() {
         { type: blob.type || "image/jpeg" }
       );
 
+      // Get actual original dimensions if ratio is not loaded yet
+      let currentAspectRatio = aspectRatioRef.current;
+
+      if (maintainAspectRatio && !currentAspectRatio) {
+        const objectUrl = URL.createObjectURL(blob);
+
+        try {
+          const dimensions = await new Promise<{
+            width: number;
+            height: number;
+          }>((resolve, reject) => {
+            const image = new Image();
+
+            image.onload = () => {
+              resolve({
+                width: image.naturalWidth,
+                height: image.naturalHeight,
+              });
+            };
+
+            image.onerror = () => {
+              reject(
+                new Error("Unable to read original image dimensions.")
+              );
+            };
+
+            image.src = objectUrl;
+          });
+
+          currentAspectRatio =
+            dimensions.width / dimensions.height;
+
+          aspectRatioRef.current = currentAspectRatio;
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      }
+
+      // Calculate missing dimensions before sending to backend
+      if (maintainAspectRatio && currentAspectRatio) {
+        if (parsedWidth !== undefined) {
+          parsedHeight = Math.round(
+            parsedWidth / currentAspectRatio
+          );
+        } else if (parsedHeight !== undefined) {
+          parsedWidth = Math.round(
+            parsedHeight * currentAspectRatio
+          );
+        }
+      }
+
       setProgressMessage("Uploading image to processing queue...");
 
-      const response = await imageService.resizeImage(file, {
+      const resizeOptions: ResizeOptions = {
         width: parsedWidth,
         height: parsedHeight,
         format,
@@ -350,7 +496,13 @@ export default function MultiToolWorkspacePage() {
           100,
           Math.max(10, Number(quality) || 90)
         ),
-      });
+        maintainAspectRatio,
+      };
+
+      const response = await imageService.resizeImage(
+        file,
+        resizeOptions
+      );
 
       if (!mounted.current || requestVersion.current !== version) {
         return;
@@ -360,6 +512,7 @@ export default function MultiToolWorkspacePage() {
         setProgressMessage(
           "Image queued. Waiting for background worker..."
         );
+
         pollJobStatus(String(response.jobId), version);
       } else {
         throw new Error(
@@ -476,7 +629,7 @@ export default function MultiToolWorkspacePage() {
               </p>
             </div>
 
-            {/* Modular Tool Switcher Tabs */}
+            {/* Tool Switcher Tabs */}
             <div className="flex items-center bg-[#fff3ec] p-1.5 rounded-2xl border border-[#fb8500]/20 gap-1">
               <button
                 onClick={() => {
@@ -537,9 +690,8 @@ export default function MultiToolWorkspacePage() {
               </p>
             </div>
 
-            {/* Right Column: Dynamic Content based on Active Tab */}
+            {/* Right Column */}
             {activeTool === "resize" ? (
-              /* RESIZE TAB — Full working section */
               <form onSubmit={handleToolSubmit} className="space-y-6">
                 <div className="space-y-4 animate-fade-in">
                   <h2 className="text-sm font-bold text-[#121212] flex items-center gap-2">
@@ -558,8 +710,11 @@ export default function MultiToolWorkspacePage() {
 
                       <input
                         type="number"
+                        min="1"
                         value={width}
-                        onChange={(e) => setWidth(e.target.value)}
+                        onChange={(e) =>
+                          handleWidthChange(e.target.value)
+                        }
                         placeholder="e.g. 800"
                         className="w-full px-4 py-2.5 rounded-xl border border-[#fb8500]/30 focus:outline-none focus:border-[#fb8500] text-sm bg-white"
                       />
@@ -572,13 +727,36 @@ export default function MultiToolWorkspacePage() {
 
                       <input
                         type="number"
+                        min="1"
                         value={height}
-                        onChange={(e) => setHeight(e.target.value)}
+                        onChange={(e) =>
+                          handleHeightChange(e.target.value)
+                        }
                         placeholder="e.g. 600"
                         className="w-full px-4 py-2.5 rounded-xl border border-[#fb8500]/30 focus:outline-none focus:border-[#fb8500] text-sm bg-white"
                       />
                     </div>
                   </div>
+
+                  {/* Maintain Aspect Ratio */}
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[#555555] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={maintainAspectRatio}
+                      onChange={(e) =>
+                        setMaintainAspectRatio(e.target.checked)
+                      }
+                      className="w-4 h-4 accent-[#fb8500] cursor-pointer"
+                    />
+
+                    Maintain aspect ratio
+                  </label>
+
+                  {maintainAspectRatio && (
+                    <p className="text-[11px] text-[#777777]">
+                      Changing width or height automatically adjusts the other dimension.
+                    </p>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -610,14 +788,16 @@ export default function MultiToolWorkspacePage() {
                         min="10"
                         max="100"
                         value={quality}
-                        onChange={(e) => setQuality(e.target.value)}
+                        onChange={(e) =>
+                          setQuality(e.target.value)
+                        }
                         className="w-full mt-2 accent-[#fb8500]"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Process & Export — only Resize tab */}
+                {/* Process & Export */}
                 <button
                   type="submit"
                   disabled={
@@ -685,7 +865,7 @@ export default function MultiToolWorkspacePage() {
                 )}
               </form>
             ) : (
-              /* COMING SOON TAB — display only */
+              /* COMING SOON TAB */
               <div className="space-y-6 animate-fade-in">
                 <div className="bg-[#fff3ec]/40 p-5 rounded-2xl border border-[#fb8500]/20">
                   <div className="flex items-center gap-2 text-sm font-bold text-[#121212] mb-1">
