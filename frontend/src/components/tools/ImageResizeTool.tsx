@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useRef,
+  Suspense,
 } from "react";
 
 import Navbar from "@/components/layout/Navbar";
@@ -34,7 +35,6 @@ import { useSearchParams } from "next/navigation";
 import { useImageResize } from "@/hooks/useImageResize";
 import API from "@/lib/api";
 import { toast } from "sonner";
-import type { ResizePreset } from "@/lib/resizePresets";
 
 const upcomingToolsSections = [
   {
@@ -62,7 +62,7 @@ const upcomingToolsSections = [
     sectionIcon: FileArchiveIcon,
     tools: [
       { name: "Bulk ZIP Compressor", description: "Compress many files into a single ZIP.", icon: FileArchiveIcon, badge: "Coming Soon" },
-      { name: "Batch Format Converter", description: "Convert hundreds of files into a single ZIP.", icon: ArrowsClockwiseIcon, badge: "On the Way" },
+      { name: "Batch Format Converter", description: "Compress many files into a single ZIP.", icon: ArrowsClockwiseIcon, badge: "On the Way" },
       { name: "Document Optimizer", description: "Optimize docs for web & email sharing.", icon: ShieldCheckIcon, badge: "Coming Soon" },
       { name: "Video Compressor", description: "Lightweight video compression online.", icon: SparkleIcon, badge: "Planned" },
     ],
@@ -101,32 +101,32 @@ interface OriginalImageDetails {
   format: string;
 }
 
-interface ImageResizeToolProps {
-  preset?: ResizePreset;
-}
+function ImageResizeToolContent() {
+  const [activeToolTab, setActiveToolTab] =
+    useState<"resize" | "coming-soon">("resize");
 
-export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
-  // Optional preset (used by landing pages like /tools/resize/50kb)
-  const presetHasSize = Boolean(preset?.width && preset?.height);
-  const presetTargetKb = preset?.targetKb ? String(preset.targetKb) : "";
-
-  const [activeToolTab, setActiveToolTab] = useState<"resize" | "coming-soon">("resize");
   const [file, setFile] = useState<File | null>(null);
 
   const [previewImage, setPreviewImage] =
     useState<string | null>(null);
 
-  const [width, setWidth] = useState(preset?.width ? String(preset.width) : "800");
-  const [height, setHeight] = useState(preset?.height ? String(preset.height) : "600");
+  const [width, setWidth] = useState("800");
+  const [height, setHeight] = useState("600");
 
   const [format, setFormat] = useState<
     "jpeg" | "png" | "webp" | "avif"
-  >(preset?.format ?? "webp");
+  >("webp");
 
   const [quality, setQuality] = useState("90");
-  const [targetKb, setTargetKb] = useState(presetTargetKb); // 👈 Added targetKb state
-  const [maintainAspectRatio, setMaintainAspectRatio] = useState(!presetHasSize);
-  const [originalDetails, setOriginalDetails] = useState<OriginalImageDetails | null>(null);
+
+  const [maintainAspectRatio, setMaintainAspectRatio] =
+    useState(true);
+
+  const [targetFileSizeKB, setTargetFileSizeKB] =
+    useState("");
+
+  const [originalDetails, setOriginalDetails] =
+    useState<OriginalImageDetails | null>(null);
 
   const [isDownloading, setIsDownloading] =
     useState(false);
@@ -175,7 +175,7 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
         setActiveToolTab("resize");
         setOriginalDetails(null);
         setMaintainAspectRatio(true);
-        setTargetKb(""); // 👈 Reset targetKb
+        setTargetFileSizeKB("");
         setFile(null);
         setPreviewImage(null);
 
@@ -190,8 +190,8 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
           response.data;
 
         const targetFile =
-          jobData.inputFiles?.[0] ||
-          jobData.outputFiles?.[0];
+          jobData.outputFiles?.[0] ||
+          jobData.inputFiles?.[0];
 
         if (!targetFile?.url) {
           if (!cancelled) {
@@ -268,6 +268,7 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
           setWidth(String(imageWidth));
           setHeight(String(imageHeight));
           setMaintainAspectRatio(true);
+          setTargetFileSizeKB("");
         };
 
         image.onerror = () => {
@@ -277,7 +278,6 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
         };
 
         image.src = objectUrl;
-
       } catch (loadError) {
         if (cancelled) return;
 
@@ -326,8 +326,8 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
     resetResize();
 
     setOriginalDetails(null);
-    setMaintainAspectRatio(!presetHasSize);
-    setTargetKb(presetTargetKb); // 👈 Reset targetKb (keeps preset value)
+    setTargetFileSizeKB("");
+    setMaintainAspectRatio(true);
     setFile(uploadedFile);
 
     const imageUrl = URL.createObjectURL(uploadedFile);
@@ -341,11 +341,8 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
         format: uploadedFile.type || "Unknown",
       });
 
-      // Keep the preset size (e.g. passport photo) instead of the original size.
-      if (!presetHasSize) {
-        setWidth(String(image.naturalWidth));
-        setHeight(String(image.naturalHeight));
-      }
+      setWidth(String(image.naturalWidth));
+      setHeight(String(image.naturalHeight));
 
       URL.revokeObjectURL(imageUrl);
     };
@@ -387,9 +384,21 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
       ? Number(height)
       : undefined;
 
-    const numericTargetKb = targetKb
-      ? Number(targetKb)
-      : undefined; // 👈 Parse targetKb value
+    const numericTargetSizeKB = targetFileSizeKB
+      ? Number(targetFileSizeKB)
+      : undefined;
+
+    if (
+      numericTargetSizeKB !== undefined &&
+      (!Number.isFinite(numericTargetSizeKB) ||
+        numericTargetSizeKB <= 0 ||
+        numericTargetSizeKB > 102400)
+    ) {
+      toast.warning("Invalid target file size", {
+        description: "Enter a target size between 1 KB and 102400 KB.",
+      });
+      return;
+    }
 
     if (
       (numericWidth !== undefined &&
@@ -411,8 +420,8 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
         height: numericHeight,
         format,
         quality: numericQuality,
-        targetKb: numericTargetKb, // 👈 Pass targetKb to hook
         maintainAspectRatio,
+        targetFileSizeKB: numericTargetSizeKB,
       });
     } catch {
       toast.error("Unable to process image", {
@@ -504,13 +513,15 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
 
   const handleChangeImage = () => {
     resetResize();
+
     setFile(null);
     setPreviewImage(null);
     setOriginalDetails(null);
-    setMaintainAspectRatio(!presetHasSize);
-    setTargetKb(presetTargetKb); // 👈 Reset targetKb (keeps preset value)
-    setWidth(preset?.width ? String(preset.width) : "800");
-    setHeight(preset?.height ? String(preset.height) : "600");
+    setTargetFileSizeKB("");
+    setMaintainAspectRatio(true);
+
+    setWidth("800");
+    setHeight("600");
   };
 
   useEffect(() => {
@@ -548,12 +559,12 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
 
             <div>
               <h1 className="text-2xl font-black text-[#121212]">
-                {preset?.h1 ?? "Free Online Image Resizer & Compressor"}
+                Image Resize & Compress Utility
               </h1>
 
               <p className="text-sm text-[#555555]">
-                {preset?.subtitle ??
-                  "Resize, compress and convert images to WebP or AVIF. No signup needed."}
+                Powered by backend database records
+                & background worker queue.
               </p>
             </div>
           </div>
@@ -792,16 +803,19 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
                         </div>
                       </div>
 
-                      {/* 👇 Target File Size (KB) Input Field Added Here */}
                       <div>
                         <label className="block text-xs font-bold text-[#333333] mb-1 uppercase tracking-wider">
-                          Target File Size (KB) — Optional
+                          Target file size (KB) — optional
                         </label>
+
                         <input
                           type="number"
                           min="1"
-                          value={targetKb}
-                          onChange={(e) => setTargetKb(e.target.value)}
+                          max="102400"
+                          value={targetFileSizeKB}
+                          onChange={(e) =>
+                            setTargetFileSizeKB(e.target.value)
+                          }
                           placeholder="e.g. 200"
                           className="w-full px-4 py-2.5 bg-white border border-[#fb8500]/20 rounded-xl text-sm font-bold focus:outline-none focus:border-[#fb8500]"
                         />
@@ -860,6 +874,45 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
                         />
                       )}
                     </div>
+
+                    {completedResult.fileDetails && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-white rounded-xl border border-green-200 text-left">
+                        <div>
+                          <p className="text-[10px] font-bold text-[#777777] uppercase">
+                            Output dimensions
+                          </p>
+
+                          <p className="text-xs font-black text-[#121212]">
+                            {completedResult.fileDetails.width &&
+                            completedResult.fileDetails.height
+                              ? `${completedResult.fileDetails.width} × ${completedResult.fileDetails.height} px`
+                              : "See preview"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-bold text-[#777777] uppercase">
+                            Output size
+                          </p>
+
+                          <p className="text-xs font-black text-[#121212]">
+                            {typeof completedResult.fileDetails.fileSize === "number"
+                              ? `${(completedResult.fileDetails.fileSize / 1024).toFixed(1)} KB`
+                              : "Not available"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-bold text-[#777777] uppercase">
+                            Output format
+                          </p>
+
+                          <p className="text-xs font-black text-[#121212]">
+                            {format.toUpperCase()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <button
                       type="button"
@@ -920,23 +973,27 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
                           return (
                             <div
                               key={tool.name}
-                              className="flex flex-col p-3 rounded-xl bg-white border border-[#fb8500]/20 shadow-sm"
-                              aria-disabled="true"
+                              className="p-4 bg-[#fff3ec]/30 border border-[#fb8500]/15 rounded-2xl flex items-start gap-3 relative group hover:border-[#fb8500]/40 transition-all"
                             >
-                              <div className="flex items-center justify-between gap-2 mb-1.5">
-                                <div className="flex items-center gap-2 text-xs font-bold text-[#121212]">
-                                  <ToolIcon size={16} className="text-[#fb8500]" />
-                                  {tool.name}
-                                </div>
-
-                                <span className="px-2 py-0.5 rounded-full bg-[#fb8500]/10 text-[#fb8500] text-[9px] font-bold border border-[#fb8500]/20 whitespace-nowrap">
-                                  {tool.badge}
-                                </span>
+                              <div className="p-2.5 bg-[#fb8500]/10 text-[#fb8500] rounded-xl shrink-0">
+                                <ToolIcon size={20} weight="duotone" />
                               </div>
 
-                              <p className="text-[10px] text-[#555555] leading-relaxed">
-                                {tool.description}
-                              </p>
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <h4 className="text-xs font-bold text-[#121212]">
+                                    {tool.name}
+                                  </h4>
+
+                                  <span className="text-[10px] font-bold px-2 py-0.5 bg-[#fb8500]/10 text-[#fb8500] rounded-full">
+                                    {tool.badge}
+                                  </span>
+                                </div>
+
+                                <p className="text-[11px] text-[#777777] leading-snug">
+                                  {tool.description}
+                                </p>
+                              </div>
                             </div>
                           );
                         })}
@@ -950,5 +1007,14 @@ export default function ImageResizeTool({ preset }: ImageResizeToolProps = {}) {
         </div>
       </main>
     </div>
+  );
+}
+
+// 🔥 Wrapped inside Suspense boundary to completely resolve the Next.js build error for useSearchParams()
+export default function ImageResizeTool() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-[#fb8500] bg-[#fff3ec]">Loading tool...</div>}>
+      <ImageResizeToolContent />
+    </Suspense>
   );
 }

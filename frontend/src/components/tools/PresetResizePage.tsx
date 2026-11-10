@@ -1,9 +1,11 @@
-import { Suspense } from "react";
+import { Suspense, type ComponentType } from "react";
 
 import ImageResizeTool from "@/components/tools/ImageResizeTool";
 import FaqSection from "@/components/FaqSection";
 import PresetLinks from "@/components/PresetLinks";
 import type { ResizePreset } from "@/lib/resizePresets";
+
+const ResizeTool = ImageResizeTool as ComponentType<{ preset: ResizePreset }>;
 
 export default function PresetResizePage({
   preset,
@@ -12,7 +14,7 @@ export default function PresetResizePage({
 }) {
   return (
     <Suspense fallback={null}>
-      <ImageResizeTool preset={preset} />
+      <ResizeTool preset={preset} />
 
       <section className="w-full bg-[#fff3ec] font-sans text-[#121212] pt-16 px-6">
         <div className="max-w-3xl mx-auto">
