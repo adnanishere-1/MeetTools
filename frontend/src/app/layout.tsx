@@ -84,7 +84,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased min-h-screen flex flex-col justify-between bg-[#fff3ec] text-[#121212] font-sans">
 
-        {/* Google Tag Manager */}
+      
         <Script
           id="gtm-init"
           strategy="afterInteractive"
