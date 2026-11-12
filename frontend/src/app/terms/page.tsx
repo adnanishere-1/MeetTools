@@ -1,4 +1,4 @@
-
+import type { Metadata } from "next";
 import Navbar from "@/components/layout/Navbar";
 import Link from "next/link";
 
@@ -6,6 +6,16 @@ import {
   ArrowLeftIcon,
   FileTextIcon,
 } from "@phosphor-icons/react/dist/ssr";
+
+export const metadata: Metadata = {
+  title: "Terms & Conditions",
+  description:
+    "Read the MeetTools terms and conditions covering account usage, uploaded content, acceptable use, and our online image processing services.",
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 export default function TermsPage() {
   return (

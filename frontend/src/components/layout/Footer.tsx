@@ -79,9 +79,9 @@ export default function Footer() {
 
           {/* Navigation Links */}
           <div>
-            <h4 className="text-xs font-bold text-[#121212] uppercase tracking-wider mb-3">
+            <p className="text-xs font-bold text-[#121212] uppercase tracking-wider mb-3">
               Navigation
-            </h4>
+            </p>
             <ul className="space-y-2 text-xs font-semibold text-[#555555]">
               <li><Link href="/" className="hover:text-[#fb8500] transition-colors">Home</Link></li>
               <li><Link href="/dashboard" className="hover:text-[#fb8500] transition-colors">Dashboard</Link></li>
@@ -92,9 +92,9 @@ export default function Footer() {
 
           {/* Socials & Connect */}
           <div>
-            <h4 className="text-xs font-bold text-[#121212] uppercase tracking-wider mb-3">
+            <p className="text-xs font-bold text-[#121212] uppercase tracking-wider mb-3">
               Socials
-            </h4>
+            </p>
             <div className="flex items-center gap-2.5 mb-3">
               <a href="#" className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all">
                 <GithubLogoIcon size={18} />

@@ -1,4 +1,5 @@
 
+import type { Metadata } from "next";
 import Navbar from "@/components/layout/Navbar";
 import Link from "next/link";
 
@@ -7,7 +8,18 @@ import {
   ShieldCheckIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
+export const metadata: Metadata = {
+  title: "Privacy Policy | MeetTools",
+  description:
+    "Learn how MeetTools collects, uses, and protects your personal information, account details, and privacy.",
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
 export default function PrivacyPage() {
+  
   return (
     <div className="min-h-screen flex flex-col bg-[#fff3ec] text-[#121212] font-sans">
       <Navbar />

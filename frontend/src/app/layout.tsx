@@ -8,11 +8,11 @@ import { Toaster } from "sonner";
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.meetools.online"),
   title: {
-    default: "MeetTools - Free Online Image Resize & Processing Tools",
+    default: "Free Online Image Tools & Utilities | MeetTools",
     template: "%s | MeetTools",
   },
   description:
-    "Resize, compress and clean images in bulk with free online tools. Batch image scaling, presets, and cloud media utilities.",
+    "Resize and enhance images online for free with MeetTools. Explore fast image processing tools, custom size presets, and easy downloads.",
   openGraph: {
     title: "MeetTools - Free Online Image Processing Tools",
     description:
