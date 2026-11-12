@@ -26,6 +26,9 @@ import type {
 
 const POLLING_INTERVAL = 2000;
 const MAX_POLLING_ATTEMPTS = 120;
+const MAX_STATUS_RETRIES = 4;
+const MAX_RESULT_RETRIES = 5;
+const RESULT_RETRY_INTERVAL = 2000;
 
 interface JobState {
   jobId: string;
@@ -51,6 +54,41 @@ function isAbortError(error: unknown): boolean {
   return (
     error instanceof Error &&
     error.name === "AbortError"
+  );
+}
+
+function getHttpStatus(error: unknown): number | undefined {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof error.status === "number"
+  ) {
+    return error.status;
+  }
+
+  return undefined;
+}
+
+function isRetryableStatusError(error: unknown): boolean {
+  const status = getHttpStatus(error);
+
+  return (
+    status === 0 ||
+    status === 408 ||
+    status === 429 ||
+    (status !== undefined && status >= 500)
+  );
+}
+
+function isResultPendingError(error: unknown): boolean {
+  const status = getHttpStatus(error);
+
+  return (
+    status === 404 ||
+    status === 409 ||
+    status === 425 ||
+    isRetryableStatusError(error)
   );
 }
 
@@ -158,8 +196,6 @@ export function useImageEnhancer() {
 
   /**
    * Upload image and create an enhancement job.
-   *
-   * POST /api/v1/enhancer
    */
   const enhanceImage = useCallback(async () => {
     if (!file || isLoading) {
@@ -201,9 +237,7 @@ export function useImageEnhancer() {
         );
       }
 
-      setStatus(
-        normalizeStatus(response.data.status)
-      );
+      setStatus(normalizeStatus(response.data.status));
 
       setJob({
         jobId,
@@ -235,62 +269,43 @@ export function useImageEnhancer() {
   /**
    * Poll enhancement job status.
    *
-   * GET /api/v1/enhancer/:jobId
+   * One polling loop per job.
+   * Avoids restarting the effect after every status request.
    */
+  const activeJobId = job?.jobId;
+
   useEffect(() => {
-    if (!job?.jobId) {
+    if (!activeJobId) {
       return;
     }
 
     let cancelled = false;
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const controller = new AbortController();
 
-    const scheduleNextPoll = (attempts: number) => {
-      timeoutId = setTimeout(() => {
-        if (!cancelled) {
-          setJob({
-            jobId: job.jobId,
-            attempts,
-          });
-        }
-      }, POLLING_INTERVAL);
+    const wait = (milliseconds: number): Promise<void> => {
+      return new Promise((resolve) => {
+        timer = setTimeout(resolve, milliseconds);
+      });
     };
 
-    const poll = async () => {
-      try {
-        const response =
-          await imageEnhancerService.getJobStatus(
-            job.jobId,
-            controller.signal
-          );
+    const retrieveResult = async () => {
+      let lastError: unknown;
 
+      for (
+        let attempt = 0;
+        attempt < MAX_RESULT_RETRIES;
+        attempt++
+      ) {
         if (cancelled || controller.signal.aborted) {
           return;
         }
 
-        const jobData = response?.data;
-
-        if (!jobData) {
-          throw new Error(
-            "The server returned an invalid job status."
-          );
-        }
-
-        const currentStatus = normalizeStatus(
-          jobData.status
-        );
-
-        /**
-         * Completed job:
-         * Retrieve the result separately.
-         */
-        if (currentStatus === "completed") {
+        try {
           const resultResponse =
             await imageEnhancerService.getEnhancementResult(
-              job.jobId,
+              activeJobId,
               controller.signal
             );
 
@@ -317,7 +332,7 @@ export function useImageEnhancer() {
             : "enhanced-image";
 
           setResult({
-            jobId: job.jobId,
+            jobId: activeJobId,
             url: resultData.downloadUrl,
             fileName,
             ...(output?.format
@@ -339,41 +354,135 @@ export function useImageEnhancer() {
           setJob(null);
 
           return;
+        } catch (err) {
+          if (
+            cancelled ||
+            controller.signal.aborted ||
+            isAbortError(err)
+          ) {
+            return;
+          }
+
+          lastError = err;
+
+          if (
+            !isResultPendingError(err) ||
+            attempt === MAX_RESULT_RETRIES - 1
+          ) {
+            throw err;
+          }
+
+          await wait(RESULT_RETRY_INTERVAL);
+        }
+      }
+
+      if (lastError) {
+        throw lastError;
+      }
+    };
+
+    const poll = async () => {
+      let attempts = 0;
+      let consecutiveErrors = 0;
+
+      try {
+        while (
+          !cancelled &&
+          !controller.signal.aborted &&
+          attempts < MAX_POLLING_ATTEMPTS
+        ) {
+          await wait(POLLING_INTERVAL);
+
+          if (cancelled || controller.signal.aborted) {
+            return;
+          }
+
+          attempts++;
+
+          try {
+            const response =
+              await imageEnhancerService.getJobStatus(
+                activeJobId,
+                controller.signal
+              );
+
+            if (cancelled || controller.signal.aborted) {
+              return;
+            }
+
+            consecutiveErrors = 0;
+
+            const jobData = response?.data;
+
+            if (!jobData) {
+              throw new Error(
+                "The server returned an invalid job status."
+              );
+            }
+
+            const currentStatus = normalizeStatus(
+              jobData.status
+            );
+
+            /**
+             * Completed job:
+             * Retrieve the result separately.
+             */
+            if (currentStatus === "completed") {
+              await retrieveResult();
+              return;
+            }
+
+            /**
+             * Failed job.
+             */
+            if (currentStatus === "failed") {
+              setError(
+                jobData.error?.message ||
+                  "Image enhancement failed. Please try again."
+              );
+
+              setStatus("failed");
+              setJob(null);
+
+              return;
+            }
+
+            /**
+             * Continue while queued or processing.
+             */
+            setStatus(currentStatus);
+          } catch (err) {
+            if (
+              cancelled ||
+              controller.signal.aborted ||
+              isAbortError(err)
+            ) {
+              return;
+            }
+
+            if (
+              isRetryableStatusError(err) &&
+              consecutiveErrors < MAX_STATUS_RETRIES
+            ) {
+              consecutiveErrors++;
+              continue;
+            }
+
+            throw err;
+          }
         }
 
-        /**
-         * Failed job.
-         */
-        if (currentStatus === "failed") {
-          setError(
-            jobData.error?.message ||
-              "Image enhancement failed. Please try again."
-          );
-
-          setStatus("failed");
-          setJob(null);
-
+        if (cancelled || controller.signal.aborted) {
           return;
         }
 
-        /**
-         * Continue polling while queued or processing.
-         */
-        const nextAttempt = job.attempts + 1;
+        setError(
+          "Image processing is taking longer than expected. Please try again later."
+        );
 
-        if (nextAttempt >= MAX_POLLING_ATTEMPTS) {
-          setError(
-            "Image processing is taking longer than expected. Please try again later."
-          );
-
-          setStatus("failed");
-          setJob(null);
-
-          return;
-        }
-
-        setStatus(currentStatus);
-        scheduleNextPoll(nextAttempt);
+        setStatus("failed");
+        setJob(null);
       } catch (err) {
         if (
           cancelled ||
@@ -395,19 +504,17 @@ export function useImageEnhancer() {
       }
     };
 
-    timeoutId = setTimeout(() => {
-      void poll();
-    }, POLLING_INTERVAL);
+    void poll();
 
     return () => {
       cancelled = true;
       controller.abort();
 
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
+      if (timer !== undefined) {
+        clearTimeout(timer);
       }
     };
-  }, [job]);
+  }, [activeJobId]);
 
   /**
    * Reset the complete enhancer state.
