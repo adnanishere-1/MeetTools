@@ -35,9 +35,9 @@ const QUEUE_NAME = "image-enhancer";
 
 const WORKER_CONCURRENCY = 2;
 
-const LOCK_DURATION = 120_000;
+const LOCK_DURATION = 300_000;
 
-const STALLED_INTERVAL = 30_000;
+const STALLED_INTERVAL = 60_000;
 
 const MAX_IMAGE_PIXELS = 40_000_000;
 
@@ -46,10 +46,14 @@ const MAX_INPUT_SIZE = 10 * 1024 * 1024;
 const MAX_OUTPUT_SIZE = 50 * 1024 * 1024;
 
 const IMAGEKIT_OUTPUT_FOLDER =
-  "/meettools/image-enhancer/results";
+  "/meetools/image-enhancer/results";
 
 const WORKER_ENABLED =
   process.env.IMAGE_ENHANCER_WORKER_ENABLED !== "false";
+
+const MAX_ATTEMPTS = 3;
+
+const RETRY_DELAY = 5_000;
 
 // --------------------------------------------------
 // Types
@@ -98,7 +102,44 @@ function getErrorCode(error: unknown): string {
     return error.code;
   }
 
+  const errorCode =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error
+      ? String(error.code)
+      : "";
+
+  if (errorCode === "ECONNRESET") {
+    return "CONNECTION_RESET";
+  }
+
+  if (
+    errorCode === "ETIMEDOUT" ||
+    errorCode === "ECONNABORTED"
+  ) {
+    return "CONNECTION_TIMEOUT";
+  }
+
   return "IMAGE_PROCESSING_FAILED";
+}
+
+function isRetryableError(error: unknown): boolean {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error
+      ? String(error.code)
+      : "";
+
+  return [
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ECONNABORTED",
+    "EPIPE",
+    "EAI_AGAIN",
+    "ENETUNREACH",
+    "ECONNREFUSED",
+  ].includes(code);
 }
 
 function validatePayload(
@@ -262,6 +303,25 @@ async function safelyDeleteImageKitFile(
   }
 }
 
+async function safelyMarkJobFailed(
+  jobId: string,
+  error: unknown,
+): Promise<void> {
+  try {
+    await markJobFailed(jobId, {
+      code: getErrorCode(error),
+      message: getErrorMessage(error),
+    });
+
+    await refundDailyQuota(jobId);
+  } catch (databaseError) {
+    console.error(
+      "[ImageEnhancer] Failed to update job status:",
+      databaseError,
+    );
+  }
+}
+
 // --------------------------------------------------
 // Worker processor
 // --------------------------------------------------
@@ -280,7 +340,6 @@ async function processEnhancementJob(
   let processingClaimed = false;
 
   try {
-    // 1. Fetch database job.
     const databaseJob = await findJobById(jobId);
 
     if (!databaseJob) {
@@ -290,7 +349,6 @@ async function processEnhancementJob(
       );
     }
 
-    // 2. Skip already completed jobs.
     if (databaseJob.status === ImageEnhancerJobStatus.COMPLETED) {
       if (
         !databaseJob.output?.fileId ||
@@ -314,7 +372,6 @@ async function processEnhancementJob(
       };
     }
 
-    // 3. Do not process permanently failed jobs.
     if (databaseJob.status === ImageEnhancerJobStatus.FAILED) {
       throw new ImageEnhancerWorkerError(
         "This enhancement job has already failed.",
@@ -322,7 +379,6 @@ async function processEnhancementJob(
       );
     }
 
-    // 4. Claim job for processing.
     const claimed = await markJobProcessing(jobId);
 
     if (!claimed) {
@@ -353,7 +409,6 @@ async function processEnhancementJob(
 
     processingClaimed = true;
 
-    // 5. Read original image from ImageKit.
     if (!databaseJob.input?.url) {
       throw new ImageEnhancerWorkerError(
         "Original ImageKit URL is missing.",
@@ -365,7 +420,6 @@ async function processEnhancementJob(
       databaseJob.input.url,
     );
 
-    // 6. Validate image dimensions.
     const metadata = await sharp(inputBuffer, {
       failOn: "error",
       limitInputPixels: MAX_IMAGE_PIXELS,
@@ -382,8 +436,6 @@ async function processEnhancementJob(
       );
     }
 
-    // 7. Execute enhancement pipeline.
-    // Options come from the BullMQ payload.
     const result = await runEnhancementPipeline({
       input: inputBuffer,
       options,
@@ -406,7 +458,6 @@ async function processEnhancementJob(
       );
     }
 
-    // 8. Upload enhanced image to ImageKit.
     const fileName =
       `${jobId}.${result.metadata.outputFormat}`;
 
@@ -422,7 +473,6 @@ async function processEnhancementJob(
 
     outputFileId = imageKitOutput.fileId;
 
-    // 9. Update database with ImageKit output.
     const completed = await markJobCompleted(jobId, {
       fileId: imageKitOutput.fileId,
       url: imageKitOutput.url,
@@ -450,33 +500,76 @@ async function processEnhancementJob(
       durationMs: Date.now() - startedAt,
     };
   } catch (error) {
-    // Delete partially uploaded ImageKit output.
+    const attemptsMade = job.attemptsMade;
+    const maxAttempts = job.opts.attempts ?? MAX_ATTEMPTS;
+
+    const finalAttempt =
+      attemptsMade + 1 >= maxAttempts;
+
+    // A retry may be needed after a temporary network error.
+    if (isRetryableError(error) && !finalAttempt) {
+      console.warn(
+        `[ImageEnhancer] Temporary network error. Retrying job ${jobId}.`,
+        getErrorMessage(error),
+      );
+
+      throw error;
+    }
+
     await safelyDeleteImageKitFile(outputFileId);
 
-    // Mark failed and refund quota only after final retry.
-    const attemptsMade = job.attemptsMade;
-    const maxAttempts = job.opts.attempts ?? 1;
-
-    const finalAttempt = attemptsMade + 1 >= maxAttempts;
-
     if (processingClaimed && finalAttempt) {
-      try {
-        await markJobFailed(jobId, {
-          code: getErrorCode(error),
-          message: getErrorMessage(error),
-        });
-
-        await refundDailyQuota(jobId);
-      } catch (databaseError) {
-        console.error(
-          "[ImageEnhancer] Failed to update job status:",
-          databaseError,
-        );
-      }
+      await safelyMarkJobFailed(jobId, error);
     }
 
     throw error;
   }
+}
+
+// --------------------------------------------------
+// Redis connection
+// --------------------------------------------------
+
+function getRedisConnection() {
+  const redisUrl = process.env.REDIS_URL;
+
+  if (redisUrl) {
+    const parsedUrl = new URL(redisUrl);
+
+    return {
+      host: parsedUrl.hostname,
+      port: Number(parsedUrl.port || 6379),
+      username: parsedUrl.username || undefined,
+      password: parsedUrl.password
+        ? decodeURIComponent(parsedUrl.password)
+        : undefined,
+      tls:
+        parsedUrl.protocol === "rediss:"
+          ? {}
+          : undefined,
+      maxRetriesPerRequest: null as null,
+      enableReadyCheck: true,
+      retryStrategy(times: number) {
+        return Math.min(times * 500, 5000);
+      },
+    };
+  }
+
+  return {
+    host: process.env.REDIS_HOST ?? "127.0.0.1",
+    port: Number(process.env.REDIS_PORT ?? 6379),
+    username: process.env.REDIS_USERNAME || undefined,
+    password: process.env.REDIS_PASSWORD || undefined,
+    tls:
+      process.env.REDIS_TLS === "true"
+        ? {}
+        : undefined,
+    maxRetriesPerRequest: null as null,
+    enableReadyCheck: true,
+    retryStrategy(times: number) {
+      return Math.min(times * 500, 5000);
+    },
+  };
 }
 
 // --------------------------------------------------
@@ -494,13 +587,7 @@ export const imageEnhancerWorker = WORKER_ENABLED
         concurrency: WORKER_CONCURRENCY,
         lockDuration: LOCK_DURATION,
         stalledInterval: STALLED_INTERVAL,
-
-        connection: {
-          host: process.env.REDIS_HOST ?? "127.0.0.1",
-          port: Number(process.env.REDIS_PORT ?? 6379),
-          password: process.env.REDIS_PASSWORD || undefined,
-          maxRetriesPerRequest: null,
-        },
+        connection: getRedisConnection(),
       },
     )
   : null;
@@ -545,8 +632,11 @@ if (imageEnhancerWorker) {
 
   imageEnhancerWorker.on("error", (error) => {
     console.error(
-      "[ImageEnhancer] Worker error:",
-      error,
+      "[ImageEnhancer] Worker connection error:",
+      {
+        message: error.message,
+        code: "code" in error ? error.code : undefined,
+      },
     );
   });
 }
@@ -564,15 +654,11 @@ export async function closeImageEnhancerWorker(): Promise<void> {
 
   if (!shutdownPromise) {
     shutdownPromise = (async () => {
-      console.info(
-        "[ImageEnhancer] Closing worker...",
-      );
+      console.info("[ImageEnhancer] Closing worker...");
 
       await imageEnhancerWorker.close();
 
-      console.info(
-        "[ImageEnhancer] Worker closed.",
-      );
+      console.info("[ImageEnhancer] Worker closed.");
     })();
   }
 
