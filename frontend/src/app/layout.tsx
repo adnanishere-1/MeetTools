@@ -99,13 +99,13 @@ export default function RootLayout({
           }}
         />
         <Script
-          src="https://www.googletagmanager.com/gtm.js?id=GTM-TCJLJ9TN"
+          src="https://www.googletagmanager.com/gtm.js?id=GTM-5FZ999RK"
           strategy="afterInteractive"
         />
 
         <noscript>
           <iframe
-            src="https://www.googletagmanager.com/ns.html?id=GTM-TCJLJ9TN"
+            src="https://www.googletagmanager.com/ns.html?id=GTM-5FZ999RK"
             height="0"
             width="0"
             style={{ display: "none", visibility: "hidden" }}
