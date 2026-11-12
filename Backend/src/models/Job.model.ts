@@ -30,19 +30,29 @@ export interface IJobOptions {
 export interface IJob extends Document {
   userId?: mongoose.Types.ObjectId;
   guestId?: string;
+
+  // Job source tool
+  tool: "resize" | "image-enhancer";
+
+  // Original Image Enhancer job reference
+  sourceEnhancerJobId?: string;
+
   status:
     | "pending"
     | "processing"
     | "completed"
     | "failed";
+
   progress: number;
   inputFiles: IImageFile[];
   outputFiles: IImageFile[];
   options: IJobOptions;
+
   error?: {
     message?: string;
     code?: string;
   };
+
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -152,6 +162,20 @@ const jobSchema = new Schema<IJob>(
       select: false,
     },
 
+    // Identify which tool created this saved job.
+    tool: {
+      type: String,
+      enum: ["resize", "image-enhancer"],
+      default: "resize",
+      required: true,
+    },
+
+    // Prevent duplicate Dashboard entries for the same enhancer job.
+    sourceEnhancerJobId: {
+      type: String,
+      trim: true,
+    },
+
     status: {
       type: String,
       enum: ["pending", "processing", "completed", "failed"],
@@ -228,6 +252,12 @@ jobSchema.index({
   guestId: 1,
   createdAt: -1,
 });
+
+// One Dashboard record per Image Enhancer job.
+jobSchema.index(
+  { sourceEnhancerJobId: 1 },
+  { unique: true, sparse: true }
+);
 
 // =====================================
 // Export Model

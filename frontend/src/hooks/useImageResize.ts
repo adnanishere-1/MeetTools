@@ -252,8 +252,8 @@ export function useImageResize() {
           setProgressMessage(
             data.status === "waiting" ||
               data.status === "queued"
-              ? "Image queued. Waiting for background worker..."
-              : "Background worker is processing your image..."
+              ? "wait..."
+              : "Background processing your image..."
           );
 
           // Schedule next check after current request finishes
@@ -354,7 +354,7 @@ export function useImageResize() {
         }
 
         setProgressMessage(
-          "Uploading image and queuing job..."
+          "Uploading image..."
         );
 
         const response =
@@ -381,7 +381,7 @@ export function useImageResize() {
         setStatus("processing");
 
         setProgressMessage(
-          "Image queued. Processing in background..."
+          "Image processing in background..."
         );
 
         // Start polling the real backend job

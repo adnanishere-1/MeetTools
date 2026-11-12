@@ -26,7 +26,7 @@ const toolsSections = [
     sectionIcon: ImagesIcon,
     tools: [
       {
-        name: "Image Resize & Compress",
+        name: "Image Resize",
         description: "Resize dimensions, convert formats, and compress images instantly.",
         icon: CropToolIcon,
         badge: "Available Now",
@@ -37,9 +37,9 @@ const toolsSections = [
         name: "Image Enhancer",
         description: "Upscale and enhance image quality with advanced background processing.",
         icon: MagicWandIcon,
-        badge: "Coming Soon",
+        badge: "Available Now",
         href: "/tools/enhance",
-        isLive: false,
+        isLive: true,
       },
       {
         name: "Image Compressor",

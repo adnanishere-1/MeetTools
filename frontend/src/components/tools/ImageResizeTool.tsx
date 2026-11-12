@@ -1,10 +1,10 @@
+
 "use client";
 
 import React, {
   useState,
   useEffect,
   useRef,
-  Suspense,
 } from "react";
 
 import Navbar from "@/components/layout/Navbar";
@@ -31,9 +31,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useImageResize } from "@/hooks/useImageResize";
-import API from "@/lib/api";
 import { toast } from "sonner";
 
 const upcomingToolsSections = [
@@ -68,19 +66,6 @@ const upcomingToolsSections = [
     ],
   },
 ];
-
-interface JobFile {
-  url?: string;
-  fileName?: string;
-  fileSize?: number;
-  width?: number;
-  height?: number;
-}
-
-interface JobData {
-  inputFiles?: JobFile[];
-  outputFiles?: JobFile[];
-}
 
 interface CompletedResizeResult {
   status: string;
@@ -133,9 +118,6 @@ function ImageResizeToolContent() {
 
   const lastHookError = useRef<string | null>(null);
 
-  const searchParams = useSearchParams();
-  const jobId = searchParams.get("jobId");
-
   const {
     handleResize,
     loading,
@@ -161,144 +143,6 @@ function ImageResizeToolContent() {
       description: "Please check your image and settings, then try again.",
     });
   }, [error]);
-
-  // Load saved image for Dashboard reuse.
-  useEffect(() => {
-    if (!jobId) return;
-
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    const fetchJobData = async () => {
-      try {
-        resetResize();
-        setActiveToolTab("resize");
-        setOriginalDetails(null);
-        setMaintainAspectRatio(true);
-        setTargetFileSizeKB("");
-        setFile(null);
-        setPreviewImage(null);
-
-        const response = await API.get(
-          `/jobs/${encodeURIComponent(jobId)}`
-        );
-
-        const jobData: JobData =
-          response.data?.job ??
-          response.data?.data?.job ??
-          response.data?.data ??
-          response.data;
-
-        const targetFile =
-          jobData.outputFiles?.[0] ||
-          jobData.inputFiles?.[0];
-
-        if (!targetFile?.url) {
-          if (!cancelled) {
-            toast.error("Image unavailable", {
-              description: "No image was found for this job.",
-            });
-          }
-          return;
-        }
-
-        const jobImageUrl = new URL(
-          targetFile.url,
-          window.location.origin
-        );
-
-        if (!["http:", "https:"].includes(jobImageUrl.protocol)) {
-          throw new Error("Invalid image URL");
-        }
-
-        const fileResponse = await fetch(jobImageUrl.href, {
-          credentials:
-            jobImageUrl.origin === window.location.origin
-              ? "include"
-              : "omit",
-        });
-
-        if (!fileResponse.ok) {
-          throw new Error(
-            "Unable to load the image from job history."
-          );
-        }
-
-        const blob = await fileResponse.blob();
-
-        if (cancelled) return;
-
-        if (!blob.type.startsWith("image/")) {
-          throw new Error("The saved file is not a valid image.");
-        }
-
-        const originalFile = new File(
-          [blob],
-          targetFile.fileName || "datastore-image.webp",
-          {
-            type: blob.type,
-          }
-        );
-
-        objectUrl = URL.createObjectURL(blob);
-
-        setFile(originalFile);
-        setPreviewImage(objectUrl);
-
-        const image = new Image();
-
-        image.onload = () => {
-          if (cancelled) return;
-
-          const imageWidth = image.naturalWidth;
-          const imageHeight = image.naturalHeight;
-
-          if (!imageWidth || !imageHeight) {
-            toast.error("Unable to read image dimensions");
-            return;
-          }
-
-          setOriginalDetails({
-            width: imageWidth,
-            height: imageHeight,
-            fileSize: blob.size,
-            format: blob.type || originalFile.type || "Unknown",
-          });
-
-          setWidth(String(imageWidth));
-          setHeight(String(imageHeight));
-          setMaintainAspectRatio(true);
-          setTargetFileSizeKB("");
-        };
-
-        image.onerror = () => {
-          if (!cancelled) {
-            toast.error("Unable to read saved image dimensions");
-          }
-        };
-
-        image.src = objectUrl;
-      } catch (loadError) {
-        if (cancelled) return;
-
-        console.error("Reuse image job loading failed:", loadError);
-
-        toast.error("Unable to load image", {
-          description: "Please try opening this job again.",
-        });
-      }
-    };
-
-    void fetchJobData();
-
-    return () => {
-      cancelled = true;
-
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [jobId, resetResize]);
 
   useEffect(() => {
     if (result?.status === "completed") {
@@ -559,12 +403,11 @@ function ImageResizeToolContent() {
 
             <div>
               <h1 className="text-2xl font-black text-[#121212]">
-                Image Resize & Compress Utility
+                Image Resize & Format
               </h1>
 
               <p className="text-sm text-[#555555]">
-                Powered by backend database records
-                & background worker queue.
+                Resize your images to any dimension and convert them to different formats.
               </p>
             </div>
           </div>
@@ -1010,11 +853,6 @@ function ImageResizeToolContent() {
   );
 }
 
-// 🔥 Wrapped inside Suspense boundary to completely resolve the Next.js build error for useSearchParams()
 export default function ImageResizeTool() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-[#fb8500] bg-[#fff3ec]">Loading tool...</div>}>
-      <ImageResizeToolContent />
-    </Suspense>
-  );
+  return <ImageResizeToolContent />;
 }

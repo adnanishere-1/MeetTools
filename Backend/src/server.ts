@@ -56,7 +56,7 @@ async function waitForRedis(): Promise<void> {
 
 // =====================================
 // Start Server
-
+// =====================================
 
 async function startServer(): Promise<void> {
   try {
@@ -73,59 +73,66 @@ async function startServer(): Promise<void> {
     // 3. Import Express app after Redis is ready
     const appModule = await import("./app.js");
 
-// Handle ESM and CommonJS default-export wrappers.
-let candidate: unknown = appModule;
+    // Handle ESM and CommonJS default-export wrappers.
+    let candidate: unknown = appModule;
 
-for (let i = 0; i < 4; i++) {
-  if (
-    candidate &&
-    (typeof candidate === "function" ||
-      typeof candidate === "object") &&
-    "listen" in candidate &&
-    typeof (candidate as { listen?: unknown }).listen === "function"
-  ) {
-    break;
-  }
+    for (let i = 0; i < 4; i++) {
+      if (
+        candidate &&
+        (typeof candidate === "function" ||
+          typeof candidate === "object") &&
+        "listen" in candidate &&
+        typeof (candidate as { listen?: unknown }).listen === "function"
+      ) {
+        break;
+      }
 
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    "default" in candidate
-  ) {
-    candidate = (candidate as { default: unknown }).default;
-    continue;
-  }
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        "default" in candidate
+      ) {
+        candidate = (candidate as { default: unknown }).default;
+        continue;
+      }
 
-  if (
-    candidate &&
-    typeof candidate === "object" &&
-    "app" in candidate
-  ) {
-    candidate = (candidate as { app: unknown }).app;
-    continue;
-  }
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        "app" in candidate
+      ) {
+        candidate = (candidate as { app: unknown }).app;
+        continue;
+      }
 
-  break;
-}
+      break;
+    }
 
-if (
-  !candidate ||
-  (typeof candidate !== "function" &&
-    typeof candidate !== "object") ||
-  !("listen" in candidate) ||
-  typeof (candidate as { listen?: unknown }).listen !== "function"
-) {
-  throw new Error(
-    `Invalid Express app export. Module exports: ${Object.keys(appModule).join(", ")}`
-  );
-}
+    if (
+      !candidate ||
+      (typeof candidate !== "function" &&
+        typeof candidate !== "object") ||
+      !("listen" in candidate) ||
+      typeof (candidate as { listen?: unknown }).listen !== "function"
+    ) {
+      throw new Error(
+        `Invalid Express app export. Module exports: ${Object.keys(appModule).join(", ")}`
+      );
+    }
 
-const app = candidate as import("express").Express;
+    const app = candidate as import("express").Express;
 
-    // 4. Initialize BullMQ resize worker
+    // 4. Initialize BullMQ Resize Worker
     await import("./workers/resizeWorker.js");
 
-    // 5. Start HTTP server
+    logger.info("Resize Worker initialization requested.");
+
+    // 5. Initialize BullMQ Image Enhancer Worker
+    await import("./workers/imageEnhancer.worker.js");
+
+    logger.info("Image Enhancer Worker initialization requested.");
+
+    // 6. Start HTTP server
     const server = app.listen(PORT, () => {
       logger.info(
         `Server is running on port ${PORT} in ${

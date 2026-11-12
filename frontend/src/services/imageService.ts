@@ -1,3 +1,4 @@
+
 import axios from "axios";
 
 // Backend API URL
@@ -8,15 +9,15 @@ const BACKEND_URL = (
     : "")
 ).replace(/\/+$/, "");
 
-// Image resize options matching original configuration
+// Image resize options
 export interface ResizeOptions {
   width?: number;
   height?: number;
   quality?: number;
   format?: "jpeg" | "png" | "webp" | "avif";
   maintainAspectRatio?: boolean;
-  targetKb?: number;           // 👈 Supports frontend state
-  targetFileSizeKB?: number;   // 👈 Supports original backend option
+  targetKb?: number;
+  targetFileSizeKB?: number;
   targetFileSizeMB?: number;
   preserveResolution?: boolean;
 }
@@ -38,6 +39,16 @@ export interface ResizeJobStatusResponse {
   [key: string]: unknown;
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
 // Axios instance
 const imageAPI = axios.create({
   baseURL: BACKEND_URL,
@@ -45,7 +56,7 @@ const imageAPI = axios.create({
   timeout: 60000,
 });
 
-// Validate and append numeric values
+// Append valid numeric values
 function appendNumberOption(
   formData: FormData,
   key: string,
@@ -53,7 +64,6 @@ function appendNumberOption(
 ): void {
   if (
     value !== undefined &&
-    value !== null &&
     Number.isFinite(value) &&
     value > 0
   ) {
@@ -73,7 +83,7 @@ export const imageService = {
 
     if (!BACKEND_URL) {
       throw new Error(
-        "Backend API URL is missing. Please configure NEXT_PUBLIC_API_URL."
+        "Backend API URL is missing. Configure NEXT_PUBLIC_API_URL."
       );
     }
 
@@ -89,15 +99,19 @@ export const imageService = {
       formData.append("format", options.format);
     }
 
-    // Aspect ratio setting
     formData.append(
       "maintainAspectRatio",
       String(options.maintainAspectRatio ?? true)
     );
 
-    // Target output file size (Handles both targetKb and targetFileSizeKB seamlessly)
-    const targetKbValue = options.targetKb ?? options.targetFileSizeKB;
-    appendNumberOption(formData, "targetFileSizeKB", targetKbValue);
+    const targetKbValue =
+      options.targetKb ?? options.targetFileSizeKB;
+
+    appendNumberOption(
+      formData,
+      "targetFileSizeKB",
+      targetKbValue
+    );
 
     appendNumberOption(
       formData,
@@ -112,11 +126,10 @@ export const imageService = {
       );
     }
 
-    const response =
-      await imageAPI.post<ResizeJobResponse>(
-        "/images/resize",
-        formData
-      );
+    const response = await imageAPI.post<ResizeJobResponse>(
+      "/images/resize",
+      formData
+    );
 
     return response.data;
   },
@@ -131,24 +144,35 @@ export const imageService = {
 
     if (!BACKEND_URL) {
       throw new Error(
-        "Backend API URL is missing. Please configure NEXT_PUBLIC_API_URL."
+        "Backend API URL is missing. Configure NEXT_PUBLIC_API_URL."
       );
     }
 
     const response =
-      await imageAPI.get<ResizeJobStatusResponse>(
+      await imageAPI.get<unknown>(
         `/images/status/${encodeURIComponent(jobId)}`
       );
 
-    // 🔥 Fixed: Replaced `any` with record casting type to satisfy eslint @typescript-eslint/no-explicit-any
-    const responseData = response.data as Record<string, unknown>;
+    const responseData = response.data;
 
-    const extractedJob =
-      (responseData?.job as ResizeJobStatusResponse) ??
-      ((responseData?.data as Record<string, unknown>)?.job as ResizeJobStatusResponse) ??
-      (responseData?.data as ResizeJobStatusResponse) ??
-      (response.data as ResizeJobStatusResponse);
+    if (!isRecord(responseData)) {
+      throw new Error("Invalid job status response from server.");
+    }
 
-    return extractedJob;
+    const data = responseData.data;
+
+    if (isRecord(data)) {
+      if (isRecord(data.job)) {
+        return data.job as ResizeJobStatusResponse;
+      }
+
+      return data as ResizeJobStatusResponse;
+    }
+
+    if (isRecord(responseData.job)) {
+      return responseData.job as ResizeJobStatusResponse;
+    }
+
+    return responseData as ResizeJobStatusResponse;
   },
 };

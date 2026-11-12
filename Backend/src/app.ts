@@ -20,6 +20,7 @@ import jobroutes from "./routes/job.routes.js";
 import presetroutes from "./routes/preset.routes.js";
 import activitylogroutes from "./routes/activitylog.routes.js";
 import adminroutes from "./routes/admin.routes.js";
+import ehnceroutes from "./routes/imageEnhancer.routes.js";
 
 // =====================================
 // Application
@@ -189,6 +190,7 @@ app.use("/api/v1/jobs", jobroutes);
 app.use("/api/v1/presets", presetroutes);
 app.use("/api/v1/activity-logs", activitylogroutes);
 app.use("/api/v1/admin", adminroutes);
+app.use("/api/v1/enhancer", ehnceroutes);
 
 // =====================================
 // Health Check

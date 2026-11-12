@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -17,7 +18,6 @@ import {
   WrenchIcon,
   DownloadSimpleIcon,
   ImageSquareIcon,
-  ArrowsClockwiseIcon,
   SpinnerGapIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
@@ -30,6 +30,7 @@ interface JobFile {
 
 interface JobItem {
   _id: string;
+  tool?: "resize" | "image-enhancer";
   status: "pending" | "processing" | "completed" | "failed";
   inputFiles: JobFile[];
   outputFiles?: JobFile[];
@@ -214,39 +215,43 @@ export default function DashboardPage() {
     }
   };
 
-  // Reuse a saved asset in the resize workspace.
-  const handleReuseJob = (jobId: string) => {
-    router.push(`/tools/resize?jobId=${encodeURIComponent(jobId)}`);
+  // Download an output file directly from ImageKit.
+  const handleDirectDownload = (
+    url: string,
+    filename: string
+  ) => {
+    if (!url) {
+      window.alert("Download URL is missing.");
+      return;
+    }
+
+    try {
+      const downloadUrl = new URL(url);
+
+      const nameWithoutExtension = filename.replace(
+        /\.[^/.]+$/,
+        ""
+      );
+
+      downloadUrl.searchParams.set("ik-attachment", "true");
+      downloadUrl.searchParams.set(
+        "ik-attachment-filename",
+        nameWithoutExtension || "downloaded-image"
+      );
+
+      window.location.assign(downloadUrl.toString());
+    } catch (downloadError: unknown) {
+      console.error(
+        "Failed to download asset:",
+        downloadError
+      );
+
+      window.alert(
+        "Unable to download this file. Please try again."
+      );
+    }
   };
 
-  // Download an output file.
-  // Download an output file directly from ImageKit.
-const handleDirectDownload = (
-  url: string,
-  filename: string
-) => {
-  if (!url) {
-    window.alert("Download URL is missing.");
-    return;
-  }
-
-  try {
-    const downloadUrl = new URL(url);
-
-    const nameWithoutExtension = filename.replace(/\.[^/.]+$/, "");
-
-    downloadUrl.searchParams.set("ik-attachment", "true");
-    downloadUrl.searchParams.set(
-      "ik-attachment-filename",
-      nameWithoutExtension || "downloaded-image"
-    );
-
-    window.location.assign(downloadUrl.toString());
-  } catch (downloadError: unknown) {
-    console.error("Failed to download asset:", downloadError);
-    window.alert("Unable to download this file. Please try again.");
-  }
-};
   // Loading screen.
   if (loading) {
     return (
@@ -417,9 +422,9 @@ const handleDirectDownload = (
               </h3>
 
               <p className="text-xs text-[#777777] max-w-sm mx-auto mb-6">
-                When you use any tool (like Image Resizer)
-                and process an image, it will automatically
-                appear here.
+                When you use tools like Image Resizer or
+                Image Enhancer and process an image, it will
+                automatically appear here.
               </p>
 
               <Link
@@ -490,30 +495,22 @@ const handleDirectDownload = (
 
                       {/* File Name and Actions */}
                       <div className="flex items-start justify-between gap-3 mb-2">
-                        <h4
-                          className="text-sm font-bold text-[#121212] truncate"
-                          title={fileName}
-                        >
-                          {fileName}
-                        </h4>
+                        <div className="min-w-0">
+                          <h4
+                            className="text-sm font-bold text-[#121212] truncate"
+                            title={fileName}
+                          >
+                            {fileName}
+                          </h4>
+
+                          {job.tool === "image-enhancer" && (
+                            <span className="text-[10px] font-semibold text-[#fb8500]">
+                              Image Enhancer
+                            </span>
+                          )}
+                        </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          {/* Reuse Job */}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleReuseJob(job._id)
-                            }
-                            className="p-2 bg-[#fb8500]/10 text-[#fb8500] hover:bg-[#fb8500] hover:text-white rounded-xl transition-colors cursor-pointer"
-                            title="Resize / Use Again in Tool"
-                            aria-label={`Reuse ${fileName}`}
-                          >
-                            <ArrowsClockwiseIcon
-                              size={18}
-                              weight="bold"
-                            />
-                          </button>
-
                           {/* Download Output */}
                           {job.status === "completed" &&
                             downloadUrl && (
