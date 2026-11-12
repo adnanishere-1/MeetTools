@@ -105,7 +105,6 @@ export async function createJob(
   data: CreateImageEnhancerJobRecord,
 ) {
   const [job] = await ImageEnhancerJobModel.create([data]);
-
   return job;
 }
 
@@ -179,7 +178,7 @@ export async function markJobProcessing(
  * Mark enhancement as completed and save/update its output
  * in the generic Dashboard Job collection.
  *
- * Only processing jobs can transition to completed.
+ * Supports both registered users and guests.
  */
 export async function markJobCompleted(
   jobId: string,
@@ -224,19 +223,34 @@ export async function markJobCompleted(
       const isUser =
         enhancerJob.actorType === ImageEnhancerActorType.USER;
 
-      if (!isUser) {
-        throw new Error(
-          "Guest Dashboard ownership mapping is not configured. Cannot safely save this image.",
-        );
+      const isGuest =
+        enhancerJob.actorType === ImageEnhancerActorType.GUEST;
+
+      if (!isUser && !isGuest) {
+        throw new Error("Invalid Image Enhancer actor type.");
       }
 
-      if (!mongoose.isValidObjectId(enhancerJob.actorId)) {
-        throw new Error("Invalid Image Enhancer user ID.");
+      if (!enhancerJob.actorId?.trim()) {
+        throw new Error("Invalid Image Enhancer actor ID.");
       }
 
-      const userId = new mongoose.Types.ObjectId(
-        enhancerJob.actorId,
-      );
+      // Registered user ownership.
+      // Guest ownership uses the server-generated HMAC actorId.
+      const ownership = isUser
+        ? (() => {
+            if (!mongoose.isValidObjectId(enhancerJob.actorId)) {
+              throw new Error("Invalid Image Enhancer user ID.");
+            }
+
+            return {
+              userId: new mongoose.Types.ObjectId(
+                enhancerJob.actorId,
+              ),
+            };
+          })()
+        : {
+            guestId: enhancerJob.actorId,
+          };
 
       const completedAt = new Date();
 
@@ -258,23 +272,15 @@ export async function markJobCompleted(
         height: output.height,
       };
 
-      /**
-       * Create or update the Dashboard record.
-       *
-       * Ownership is included in the filter.
-       * Existing records belonging to this user are updated.
-       * A new record is inserted if none exists.
-       *
-       * The unique sourceEnhancerJobId index prevents duplicates.
-       */
+      // Save the Dashboard record under the correct owner.
       await Job.updateOne(
         {
           sourceEnhancerJobId: jobId,
-          userId,
+          ...ownership,
         },
         {
           $set: {
-            userId,
+            ...ownership,
             tool: "image-enhancer",
             sourceEnhancerJobId: jobId,
             status: "completed",
@@ -297,9 +303,7 @@ export async function markJobCompleted(
         },
       );
 
-      /**
-       * Complete the original Image Enhancer job.
-       */
+      // Complete the original Image Enhancer job.
       const result = await ImageEnhancerJobModel.updateOne(
         {
           jobId,
