@@ -1,4 +1,6 @@
+
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 import Footer from "@/components/layout/Footer";
@@ -81,6 +83,36 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased min-h-screen flex flex-col justify-between bg-[#fff3ec] text-[#121212] font-sans">
+
+        {/* Google Tag Manager */}
+        <Script
+          id="gtm-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              window.dataLayer.push({
+                "gtm.start": new Date().getTime(),
+                event: "gtm.js"
+              });
+            `,
+          }}
+        />
+        <Script
+          src="https://www.googletagmanager.com/gtm.js?id=GTM-TCJLJ9TN"
+          strategy="afterInteractive"
+        />
+
+        <noscript>
+          <iframe
+            src="https://www.googletagmanager.com/ns.html?id=GTM-TCJLJ9TN"
+            height="0"
+            width="0"
+            style={{ display: "none", visibility: "hidden" }}
+            title="Google Tag Manager"
+          />
+        </noscript>
+
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
