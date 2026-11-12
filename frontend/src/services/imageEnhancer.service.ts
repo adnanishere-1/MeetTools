@@ -1,10 +1,20 @@
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
-  ?.trim()
-  .replace(/\/+$/, "");
+const API_PREFIX = /\/api\/v1$/i.test(
+  process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "") || ""
+)
+  ? ""
+  : "/api/v1";
 
-if (!API_BASE_URL) {
-  throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+function getApiBaseUrl(): string {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL
+    ?.trim()
+    .replace(/\/+$/, "");
+
+  if (!apiBaseUrl) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+  }
+
+  return apiBaseUrl;
 }
 
 /**
@@ -12,10 +22,6 @@ if (!API_BASE_URL) {
  * http://localhost:5000
  * http://localhost:5000/api/v1
  */
-const API_PREFIX = /\/api\/v1$/i.test(API_BASE_URL)
-  ? ""
-  : "/api/v1";
-
 const API_ROUTES = {
   enhance: `${API_PREFIX}/enhancer`,
   status: (jobId: string) =>
@@ -143,7 +149,7 @@ async function apiRequest<T>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${getApiBaseUrl()}${endpoint}`;
 
   let response: Response;
 
