@@ -704,9 +704,9 @@ function ImageResizeToolContent() {
               <div ref={resultRef}>
                 {completedResult && (
                   <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-2xl space-y-4 text-center">
-                    <h3 className="text-base font-black text-green-800">
+                    <p className="text-base font-black text-green-800">
                       ✅ Image Processed Successfully via Datastore!
-                    </h3>
+                    </p>
 
                     <div className="flex justify-center my-2">
                       {completedResult.previewUrl && (
@@ -783,10 +783,10 @@ function ImageResizeToolContent() {
           ) : (
             <div className="space-y-6">
               <div className="bg-[#fff3ec]/40 p-5 rounded-2xl border border-[#fb8500]/20">
-                <div className="flex items-center gap-2 text-sm font-bold text-[#121212] mb-1">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-[#121212] mb-1">
                   <WrenchIcon size={20} className="text-[#fb8500]" />
                   Multiple Tools Coming Soon
-                </div>
+                </h2>
 
                 <p className="text-xs text-[#555555] leading-relaxed">
                   We are building a full toolbox. Below are the upcoming tools — each section will unlock soon. Stay tuned!

@@ -7,11 +7,20 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import ImageEnhancerTool from "@/components/tools/image-enhancer/ImageEnhancerTool";
+import EnhanceContent from "@/components/EnhanceContent";
+import PresetLinks from "@/components/PresetLinks";
 
 export const metadata: Metadata = {
-  title: "Image Enhancer | MeetTools",
+  title: "Enhance Image Quality Online Free",
   description:
-    "Enhance your images online with MeetTools. Upload an image, adjust enhancement settings, customize backgrounds, and download your improved result.",
+    "Enhance your images online for free. Upload an image, adjust enhancement settings, customize the background and download your improved result.",
+  alternates: { canonical: "/tools/enhance" },
+  openGraph: {
+    title: "Enhance Image Quality Online Free | MeetTools",
+    description:
+      "Improve photo quality online with the free MeetTools Image Enhancer.",
+    url: "https://www.meetools.online/tools/enhance",
+  },
   robots: {
     index: true,
     follow: true,
@@ -50,11 +59,12 @@ export default function EnhancePage() {
                 id="image-enhancer-heading"
                 className="text-2xl font-black text-[#121212]"
               >
-                Image Enhancer
+                Free Online Image Enhancer
               </h1>
 
               <p className="text-sm text-[#555555]">
-                Upscale and enhance image quality with processing.
+                Upscale and enhance image quality online. Adjust the settings
+                and customize the background.
               </p>
             </div>
           </div>
@@ -62,6 +72,9 @@ export default function EnhancePage() {
           <ImageEnhancerTool />
         </section>
       </main>
+
+      <EnhanceContent />
+      <PresetLinks currentHref="/tools/enhance" />
     </div>
   );
 }

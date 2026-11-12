@@ -46,7 +46,7 @@ const toolsSections = [
         description: "Reduce image file size up to 90% without losing visual quality.",
         icon: LightningIcon,
         badge: "Coming Soon",
-        href: "/tools/compress",
+        href: "#",
         isLive: false,
       },
       {

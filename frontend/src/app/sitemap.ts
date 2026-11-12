@@ -10,6 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE_URL}/`, lastModified: now, priority: 1 },
     { url: `${BASE_URL}/tools`, lastModified: now, priority: 0.9 },
     { url: `${BASE_URL}/tools/resize`, lastModified: now, priority: 0.8 },
+    { url: `${BASE_URL}/tools/enhance`, lastModified: now, priority: 0.8 },
     ...resizePresets.map((p) => ({
       url: `${BASE_URL}/tools/resize/${p.slug}`,
       lastModified: now,

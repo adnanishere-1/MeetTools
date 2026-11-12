@@ -309,12 +309,10 @@ export default function Home() {
 
             {/* Files Compress */}
             <Link
-              href="/signup"
+              href="/tools/enhance"
               className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
             >
-              <div className="absolute top-4 right-4">
-                <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
-              </div>
+
 
               <div className="flex items-start justify-between mb-4">
                 <div className="p-3 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl">
@@ -335,119 +333,119 @@ export default function Home() {
               </p>
             </Link>
 
-              {/* PDF Converter */}
-              <Link
-                href="/signup"
-                className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
-              >
-                <div className="absolute top-4 right-4">
-                  <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
+            {/* PDF Converter */}
+            <Link
+              href="/signup"
+              className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4">
+                <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
+              </div>
+
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
+                  <FilePdfIcon size={26} weight="duotone" />
                 </div>
 
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
-                    <FilePdfIcon size={26} weight="duotone" />
-                  </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
+                  Coming Soon
+                </span>
+              </div>
 
-                  <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
-                    Coming Soon
-                  </span>
+              <h3 className="text-base font-bold text-[#121212] mb-1">
+                PDF Converter & Merge
+              </h3>
+
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Convert images to PDF, merge documents, split, and optimize
+                PDFs.
+              </p>
+            </Link>
+
+            {/* ZIP Compressor */}
+            <Link
+              href="/signup"
+              className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4">
+                <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
+              </div>
+
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
+                  <FileArchiveIcon size={26} weight="duotone" />
                 </div>
 
-                <h3 className="text-base font-bold text-[#121212] mb-1">
-                  PDF Converter & Merge
-                </h3>
+                <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
+                  Coming Soon
+                </span>
+              </div>
 
-                <p className="text-xs text-[#555555] leading-relaxed">
-                  Convert images to PDF, merge documents, split, and optimize
-                  PDFs.
-                </p>
-              </Link>
+              <h3 className="text-base font-bold text-[#121212] mb-1">
+                Bulk ZIP Compressor
+              </h3>
 
-              {/* ZIP Compressor */}
-              <Link
-                href="/signup"
-                className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
-              >
-                <div className="absolute top-4 right-4">
-                  <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Process up to 50 files simultaneously and export neatly
+                packaged ZIP archives.
+              </p>
+            </Link>
+
+            {/* Job History */}
+            <Link
+              href="/signup"
+              className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4">
+                <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
+              </div>
+
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
+                  <FolderIcon size={26} weight="duotone" />
                 </div>
 
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
-                    <FileArchiveIcon size={26} weight="duotone" />
-                  </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
+                  Coming Soon
+                </span>
+              </div>
 
-                  <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
-                    Coming Soon
-                  </span>
+              <h3 className="text-base font-bold text-[#121212] mb-1">
+                Passport Size Photo Generator
+              </h3>
+              Genrate passport size photos with the correct dimensions and format for official documents.
+              <p className="text-xs text-[#555555] leading-relaxed">
+
+              </p>
+            </Link>
+
+            {/* Priority Queue */}
+            <Link
+              href="/signup"
+              className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
+            >
+              <div className="absolute top-4 right-4">
+                <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
+              </div>
+
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
+                  <ClockIcon size={26} weight="duotone" />
                 </div>
 
-                <h3 className="text-base font-bold text-[#121212] mb-1">
-                  Bulk ZIP Compressor
-                </h3>
+                <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
+                  Coming Soon
+                </span>
+              </div>
 
-                <p className="text-xs text-[#555555] leading-relaxed">
-                  Process up to 50 files simultaneously and export neatly
-                  packaged ZIP archives.
-                </p>
-              </Link>
+              <h3 className="text-base font-bold text-[#121212] mb-1">
+                Watermark Remover
+              </h3>
 
-              {/* Job History */}
-              <Link
-                href="/signup"
-                className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
-              >
-                <div className="absolute top-4 right-4">
-                  <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
-                </div>
-
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
-                    <FolderIcon size={26} weight="duotone" />
-                  </div>
-
-                  <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
-                    Coming Soon
-                  </span>
-                </div>
-
-                <h3 className="text-base font-bold text-[#121212] mb-1">
-                  Passport Size Photo Generator
-                </h3>
-                Genrate passport size photos with the correct dimensions and format for official documents.
-                <p className="text-xs text-[#555555] leading-relaxed">
-
-                </p>
-              </Link>
-
-              {/* Priority Queue */}
-              <Link
-                href="/signup"
-                className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
-              >
-                <div className="absolute top-4 right-4">
-                  <LockIcon size={16} weight="fill" className="text-[#555555]/40" />
-                </div>
-
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 bg-[#fff3ec] text-[#555555]/60 rounded-2xl">
-                    <ClockIcon size={26} weight="duotone" />
-                  </div>
-
-                  <span className="px-2.5 py-1 rounded-full bg-[#121212] text-white text-[9px] font-bold">
-                    Coming Soon
-                  </span>
-                </div>
-
-                <h3 className="text-base font-bold text-[#121212] mb-1">
-                  Watermark Remover
-                </h3>
-
-                <p className="text-xs text-[#555555] leading-relaxed">
-                  Remove watermarks from images .
-                </p>
-              </Link>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Remove watermarks from images .
+              </p>
+            </Link>
           </div>
         </div>
 

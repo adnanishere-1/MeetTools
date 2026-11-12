@@ -18,9 +18,8 @@ export default function ResizeGuide() {
     <section className="w-full bg-[#fff3ec] font-sans text-[#121212] pt-16 px-6">
       <div className="max-w-3xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-black mb-4">
-          Free Online Image Resizer
+          How to Resize Images Online
         </h2>
-
         <p className="text-sm md:text-base text-[#555555] leading-relaxed mb-8">
           MeetTools lets you resize, compress and convert images online
           without installing anything. Reduce image dimensions for websites,
