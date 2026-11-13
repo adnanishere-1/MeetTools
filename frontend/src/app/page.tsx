@@ -567,7 +567,7 @@ export default function Home() {
 
                 <button
                   onClick={() => handleConsentAction("accepted")}
-                  className="px-6 py-2.5 rounded-xl bg-[#A84F00] hover:bg-[#e07600] text-white text-sm font-bold transition-all shadow-md shadow-[#fb8500]/30 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-[#fb8500] hover:bg-[#e07600] text-white text-sm font-bold transition-all shadow-md shadow-[#fb8500]/30 cursor-pointer"
                 >
                   Accept All
                 </button>
