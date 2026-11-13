@@ -413,7 +413,7 @@ export default function Home() {
               <h3 className="text-base font-bold text-[#121212] mb-1">
                 Passport Size Photo Generator
               </h3>
-              Genrate passport size photos with the correct dimensions and format for official documents.
+              Genrate passport size photos.
               <p className="text-xs text-[#555555] leading-relaxed">
 
               </p>
