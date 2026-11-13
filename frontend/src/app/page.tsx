@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useSyncExternalStore } from "react";
@@ -105,7 +104,7 @@ export default function Home() {
       {/* HERO */}
       <main className="flex-1 flex flex-col items-center px-6 pt-20 pb-24 text-center max-w-5xl mx-auto w-full">
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#A84F00] text-xs font-bold mb-6 shadow-sm animate-fade-in">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-xs font-bold mb-6 shadow-sm animate-fade-in">
           <SquaresFourIcon
             size={16}
             weight="fill"
@@ -117,7 +116,7 @@ export default function Home() {
         {/* Heading */}
         <h1 className="text-5xl md:text-7xl font-black tracking-tight text-[#121212] mb-6 leading-tight">
           One Suite. Infinite Utilities. <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#A84F00] to-[#92400E]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#fb8500] to-[#e07600]">
             Supercharge Your Workflow
           </span>
         </h1>
@@ -131,7 +130,7 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row gap-4 w-full justify-center max-w-2xl mb-3">
           <Link
             href="/tools"
-            className="flex items-center justify-center gap-2 h-14 px-8 rounded-2xl bg-[#B45309] hover:bg-[#92400E] text-white font-bold transition-all shadow-xl shadow-[#fb8500]/30 text-base"
+            className="flex items-center justify-center gap-2 h-14 px-8 rounded-2xl bg-[#fb8500] hover:bg-[#e07600] text-white font-bold transition-all shadow-xl shadow-[#fb8500]/30 text-base"
           >
             <RocketIcon size={20} weight="bold" />
             Try Instantly — No Signup Needed
@@ -175,13 +174,13 @@ export default function Home() {
         {/* WHY LOGIN */}
         <div className="w-full max-w-5xl mb-32 text-left">
           <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="inline-block px-3 py-1 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#A84F00] text-[10px] font-bold uppercase tracking-widest mb-3">
+            <span className="inline-block px-3 py-1 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-[10px] font-bold uppercase tracking-widest mb-3">
               Why Create an Account?
             </span>
 
             <h2 className="text-3xl md:text-5xl font-black text-[#121212] mb-4 leading-tight">
               Upload Once.{" "}
-              <span className="text-[#A84F00]">Reuse Forever.</span>
+              <span className="text-[#fb8500]">Reuse Forever.</span>
             </h2>
 
             <p className="text-sm md:text-base text-[#555555] leading-relaxed">
@@ -211,7 +210,7 @@ export default function Home() {
                 without re-uploading.
               </p>
 
-              <div className="flex items-center gap-2 text-[10px] font-bold text-[#A84F00] uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-[#fb8500] uppercase tracking-wider">
                 <CheckCircleIcon size={14} weight="fill" />
                 Members Only
               </div>
@@ -233,7 +232,7 @@ export default function Home() {
                 anytime without data loss.
               </p>
 
-              <div className="flex items-center gap-2 text-[10px] font-bold text-[#A84F00] uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-[#fb8500] uppercase tracking-wider">
                 <CheckCircleIcon size={14} weight="fill" />
                 Members Only
               </div>
@@ -268,13 +267,13 @@ export default function Home() {
         {/* TOOLS PREVIEW GRID */}
         <div className="w-full max-w-5xl mb-32 text-left">
           <div className="text-center max-w-xl mx-auto mb-10">
-            <span className="inline-block px-3 py-1 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#A84F00] text-[10px] font-bold uppercase tracking-widest mb-3">
+            <span className="inline-block px-3 py-1 rounded-full bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] text-[10px] font-bold uppercase tracking-widest mb-3">
               The Toolkit
             </span>
 
             <h2 className="text-3xl md:text-4xl font-black text-[#121212] mb-3">
               Every Tool You Need.{" "}
-              <span className="text-[#A84F00]">One Dashboard.</span>
+              <span className="text-[#fb8500]">One Dashboard.</span>
             </h2>
 
             <p className="text-sm text-[#555555]">
@@ -293,7 +292,7 @@ export default function Home() {
                   <ImagesIcon size={26} weight="duotone" />
                 </div>
 
-                <span className="px-2.5 py-1 rounded-full bg-[#fb8500]/10 text-[#A84F00] text-[9px] font-bold border border-[#fb8500]/20">
+                <span className="px-2.5 py-1 rounded-full bg-[#fb8500]/10 text-[#fb8500] text-[9px] font-bold border border-[#fb8500]/20">
                   Available Now
                 </span>
               </div>
@@ -313,12 +312,14 @@ export default function Home() {
               href="/tools/enhance"
               className="group bg-white p-6 rounded-3xl border-2 border-[#fb8500]/20 hover:border-[#fb8500] shadow-lg shadow-[#fb8500]/5 transition-all cursor-pointer relative overflow-hidden"
             >
+
+
               <div className="flex items-start justify-between mb-4">
                 <div className="p-3 bg-[#fb8500]/10 text-[#fb8500] rounded-2xl">
                   <ImagesIcon size={26} weight="duotone" />
                 </div>
 
-                <span className="px-2.5 py-1 rounded-full bg-[#fb8500]/10 text-[#A84F00] text-[9px] font-bold border border-[#fb8500]/20">
+                <span className="px-2.5 py-1 rounded-full bg-[#fb8500]/10 text-[#fb8500] text-[9px] font-bold border border-[#fb8500]/20">
                   Available Now
                 </span>
               </div>
@@ -413,7 +414,9 @@ export default function Home() {
                 Passport Size Photo Generator
               </h3>
               Genrate passport size photos with the correct dimensions and format for official documents.
-              <p className="text-xs text-[#555555] leading-relaxed"></p>
+              <p className="text-xs text-[#555555] leading-relaxed">
+
+              </p>
             </Link>
 
             {/* Priority Queue */}
@@ -468,7 +471,7 @@ export default function Home() {
                     <UploadSimpleIcon size={28} weight="duotone" />
                   </div>
 
-                  <span className="text-3xl font-black text-[#A84F00]">
+                  <span className="text-3xl font-black text-[#fb8500]/20">
                     01
                   </span>
                 </div>
@@ -492,7 +495,7 @@ export default function Home() {
                     <SlidersHorizontalIcon size={28} weight="duotone" />
                   </div>
 
-                  <span className="text-3xl font-black text-[#A84F00]">
+                  <span className="text-3xl font-black text-[#fb8500]/20">
                     02
                   </span>
                 </div>
@@ -516,7 +519,7 @@ export default function Home() {
                     <DownloadSimpleIcon size={28} weight="duotone" />
                   </div>
 
-                  <span className="text-3xl font-black text-[#A84F00]">
+                  <span className="text-3xl font-black text-[#fb8500]/20">
                     03
                   </span>
                 </div>
@@ -564,7 +567,7 @@ export default function Home() {
 
                 <button
                   onClick={() => handleConsentAction("accepted")}
-                  className="px-6 py-2.5 rounded-xl bg-[#B45309] hover:bg-[#92400E] text-white text-sm font-bold transition-all shadow-md shadow-[#fb8500]/30 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-[#A84F00] hover:bg-[#e07600] text-white text-sm font-bold transition-all shadow-md shadow-[#fb8500]/30 cursor-pointer"
                 >
                   Accept All
                 </button>
