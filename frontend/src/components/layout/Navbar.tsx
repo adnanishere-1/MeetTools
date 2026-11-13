@@ -336,7 +336,7 @@ export default function Navbar() {
                 disabled={loggingOut}
                 className="text-center py-2.5 text-sm font-bold text-red-500 bg-red-50 rounded-xl border border-red-200"
               >
-                {loggingOut ? "Logging out..." : "Logout"}
+                aria-label={loggingOut ? "Logging out" : "Logout"}
               </button>
             ) : !loading && (
               <>

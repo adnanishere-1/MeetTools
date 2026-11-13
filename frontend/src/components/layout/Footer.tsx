@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { 
-  ImageSquareIcon, 
-  EnvelopeSimpleIcon, 
-  ArrowRightIcon, 
-  GithubLogoIcon, 
-  TwitterLogoIcon, 
+import {
+  ImageSquareIcon,
+  EnvelopeSimpleIcon,
+  ArrowRightIcon,
+  GithubLogoIcon,
+  TwitterLogoIcon,
   LinkedinLogoIcon,
   HeartIcon
 } from "@phosphor-icons/react/dist/ssr";
@@ -28,10 +28,10 @@ export default function Footer() {
   return (
     <footer className="bg-white border-t border-[#fb8500]/20 text-[#121212] font-sans">
       <div className="max-w-7xl mx-auto px-6 py-10">
-        
+
         {/* Compact Grid Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pb-8 border-b border-[#fb8500]/10">
-          
+
           {/* Brand Overview & Description */}
           <div className="lg:col-span-2 space-y-3">
             <Link href="/" className="inline-flex items-center gap-2.5">
@@ -42,7 +42,7 @@ export default function Footer() {
                 Meet<span className="text-[#fb8500]">Tools</span>
               </span>
             </Link>
-            
+
             <p className="text-xs text-[#555555] leading-relaxed max-w-sm">
               The next-generation cloud media platform designed for high-performance image processing, automated scaling, and precision batch optimization.
             </p>
@@ -60,6 +60,7 @@ export default function Footer() {
                     <input
                       type="email"
                       required
+                      aria-label="Email address"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Enter your email"
@@ -96,14 +97,26 @@ export default function Footer() {
               Socials
             </p>
             <div className="flex items-center gap-2.5 mb-3">
-              <a href="#" className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all">
-                <GithubLogoIcon size={18} />
+              <a
+                href="#"
+                aria-label="GitHub"
+                className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all"
+              >
+                <GithubLogoIcon size={18} aria-hidden="true" />
               </a>
-              <a href="#" className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all">
-                <TwitterLogoIcon size={18} />
+              <a
+                href="#"
+                aria-label="Twitter"
+                className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all"
+              >
+                <TwitterLogoIcon size={18} aria-hidden="true" />
               </a>
-              <a href="#" className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all">
-                <LinkedinLogoIcon size={18} />
+              <a
+                href="#"
+                aria-label="LinkedIn"
+                className="p-2 bg-[#fff3ec] border border-[#fb8500]/20 rounded-xl text-[#fb8500] hover:bg-[#fb8500] hover:text-white transition-all"
+              >
+                <LinkedinLogoIcon size={18} aria-hidden="true" />
               </a>
             </div>
             <p className="text-[11px] text-[#777777] leading-relaxed">
@@ -116,7 +129,7 @@ export default function Footer() {
         {/* Bottom Bar Section */}
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-semibold text-[#777777]">
           <p>© {new Date().getFullYear()} MeetTools SaaS. All rights reserved.</p>
-          
+
           <div className="flex items-center gap-1">
             <span>Built with</span>
             <HeartIcon size={13} weight="fill" className="text-[#fb8500]" />
