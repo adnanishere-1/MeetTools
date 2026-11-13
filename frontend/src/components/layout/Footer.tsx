@@ -51,7 +51,7 @@ export default function Footer() {
             <div className="pt-1">
               {subscribed ? (
                 <div className="p-2 bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] rounded-xl text-xs font-bold text-center max-w-sm">
-                  🎉 Thank you for subscribing!
+                   Thank you for subscribing!
                 </div>
               ) : (
                 <form onSubmit={handleSubscribe} className="flex items-center gap-2 max-w-sm">
