@@ -51,7 +51,7 @@ export default function Footer() {
             <div className="pt-1">
               {subscribed ? (
                 <div className="p-2 bg-[#fb8500]/10 border border-[#fb8500]/30 text-[#fb8500] rounded-xl text-xs font-bold text-center max-w-sm">
-                   Thank you for subscribing!
+                  Thank you for subscribing!
                 </div>
               ) : (
                 <form onSubmit={handleSubscribe} className="flex items-center gap-2 max-w-sm">
@@ -69,9 +69,10 @@ export default function Footer() {
                   </div>
                   <button
                     type="submit"
+                    aria-label="Subscribe to newsletter"
                     className="p-2 bg-[#fb8500] hover:bg-[#e07600] text-white rounded-xl transition-all shadow-md shadow-[#fb8500]/20 shrink-0"
                   >
-                    <ArrowRightIcon size={16} weight="bold" />
+                    <ArrowRightIcon size={16} weight="bold" aria-hidden="true" />
                   </button>
                 </form>
               )}
