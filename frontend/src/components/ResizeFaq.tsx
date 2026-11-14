@@ -1,30 +1,31 @@
+
 import FaqSection from "@/components/FaqSection";
 
 const resizeFaqs = [
   {
     question: "Is the image resizer free to use?",
     answer:
-      "Yes. You can resize images for free without creating an account.",
+      "Yes. MeetTools lets you resize images online for free without creating an account. Upload an image, choose your required dimensions, and download the resized result.",
   },
   {
-    question: "Does resizing an image reduce its quality?",
+    question: "How can I resize an image without losing quality?",
     answer:
-      "You control the output quality yourself. At higher quality settings the difference is hard to notice.",
+      "Choose suitable image dimensions and adjust the output quality settings. Higher quality settings generally preserve more visual detail, while stronger compression can reduce file size but may affect image quality.",
   },
   {
-    question: "Can I convert images to WebP or AVIF?",
+    question: "Can I resize and convert images to WebP or AVIF?",
     answer:
-      "Yes. You can resize and convert your images to modern formats like WebP and AVIF while controlling compression quality.",
+      "Yes. You can resize images and convert them to supported output formats such as WebP and AVIF. Choose your preferred format and quality settings before downloading.",
   },
   {
-    question: "Do I need an account to use the tool?",
+    question: "Do I need an account to resize images?",
     answer:
-      "No. Guest mode lets you resize and download instantly. A free account lets you reuse your uploaded files and keep your history.",
+      "No. You can use guest mode to resize and download images without signing up. A free account also provides access to saved files and image history.",
   },
   {
-    question: "How long are my files stored?",
+    question: "How long are uploaded images stored?",
     answer:
-      "Files saved to your account are automatically deleted after 24 hours. In guest mode, files are discarded right after processing.",
+      "Files saved to your account are automatically deleted after 24 hours. In guest mode, files are discarded after processing.",
   },
 ];
 

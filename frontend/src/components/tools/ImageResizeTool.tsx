@@ -403,11 +403,13 @@ function ImageResizeToolContent() {
 
             <div>
               <h1 className="text-2xl font-black text-[#121212]">
-                Image Resize & Format
+                Free Online Image Resizer
               </h1>
 
-              <p className="text-sm text-[#555555]">
-                Resize your images to any dimension and convert them to different formats.
+              <p className="text-sm text-[#555555] leading-relaxed mt-1">
+                Resize images online by setting custom width and height in pixels.
+                Compress images, adjust quality, and convert supported formats
+                including JPG, PNG, WebP, and AVIF.
               </p>
             </div>
           </div>
@@ -416,11 +418,10 @@ function ImageResizeToolContent() {
             <button
               type="button"
               onClick={() => setActiveToolTab("resize")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeToolTab === "resize"
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeToolTab === "resize"
                   ? "bg-[#fb8500] text-white shadow-md"
                   : "text-[#555555] hover:text-[#fb8500]"
-              }`}
+                }`}
             >
               Resize & Format
             </button>
@@ -428,11 +429,10 @@ function ImageResizeToolContent() {
             <button
               type="button"
               onClick={() => setActiveToolTab("coming-soon")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeToolTab === "coming-soon"
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeToolTab === "coming-soon"
                   ? "bg-[#fb8500] text-white shadow-md"
                   : "text-[#555555] hover:text-[#fb8500]"
-              }`}
+                }`}
             >
               Coming Soon Tools
             </button>
@@ -468,7 +468,7 @@ function ImageResizeToolContent() {
                       {previewImage && (
                         <img
                           src={previewImage}
-                          alt="Selected Preview"
+                        alt={`Preview of uploaded image: ${file?.name || "selected image"}`}
                           className="max-h-60 object-contain rounded-xl shadow-md border border-[#fb8500]/20"
                         />
                       )}
@@ -615,10 +615,10 @@ function ImageResizeToolContent() {
                             onChange={(e) =>
                               setFormat(
                                 e.target.value as
-                                  | "jpeg"
-                                  | "png"
-                                  | "webp"
-                                  | "avif"
+                                | "jpeg"
+                                | "png"
+                                | "webp"
+                                | "avif"
                               )
                             }
                             className="w-full px-4 py-2.5 bg-white border border-[#fb8500]/20 rounded-xl text-sm font-bold focus:outline-none focus:border-[#fb8500]"
@@ -727,7 +727,7 @@ function ImageResizeToolContent() {
 
                           <p className="text-xs font-black text-[#121212]">
                             {completedResult.fileDetails.width &&
-                            completedResult.fileDetails.height
+                              completedResult.fileDetails.height
                               ? `${completedResult.fileDetails.width} × ${completedResult.fileDetails.height} px`
                               : "See preview"}
                           </p>
@@ -767,7 +767,7 @@ function ImageResizeToolContent() {
                         handleDownloadImage(
                           completedResult.downloadUrl || "",
                           completedResult.fileDetails?.fileName ||
-                            `compressed-image.${format}`
+                          `compressed-image.${format}`
                         )
                       }
                       className="block text-center w-full py-3.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-green-600/30 transition-all cursor-pointer disabled:opacity-50"

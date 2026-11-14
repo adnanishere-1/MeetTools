@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import Navbar from "@/components/layout/Navbar";
 import Link from "next/link";
@@ -11,15 +12,18 @@ import EnhanceContent from "@/components/EnhanceContent";
 import PresetLinks from "@/components/PresetLinks";
 
 export const metadata: Metadata = {
-  title: "Enhance Image Quality Online Free",
+  title: "Free Online Image Enhancer",
   description:
-    "Enhance your images online for free. Upload an image, adjust enhancement settings, customize the background and download your improved result.",
-  alternates: { canonical: "/tools/enhance" },
+    "Enhance image quality online for free with MeetTools. Improve your photos, adjust enhancement settings, and download enhanced images in a few simple steps.",
+  alternates: {
+    canonical: "/tools/enhance",
+  },
   openGraph: {
-    title: "Enhance Image Quality Online Free | MeetTools",
+    title: "Free Online Image Enhancer | MeetTools",
     description:
-      "Improve photo quality online with the free MeetTools Image Enhancer.",
+      "Improve image quality online with the free MeetTools Image Enhancer. Adjust settings and download your enhanced photos.",
     url: "https://www.meetools.online/tools/enhance",
+    type: "website",
   },
   robots: {
     index: true,
@@ -63,8 +67,8 @@ export default function EnhancePage() {
               </h1>
 
               <p className="text-sm text-[#555555]">
-                Upscale and enhance image quality online. Adjust the settings
-                and customize the background.
+                Enhance image quality online. Adjust the settings and customize
+                the background to improve your images.
               </p>
             </div>
           </div>

@@ -1,41 +1,42 @@
+
 import Link from "next/link";
 import FaqSection from "@/components/FaqSection";
 
 const improvements = [
   {
-    title: "Better image quality",
-    text: "Improve the overall look of everyday photos, profile pictures and product images.",
+    title: "Improve image quality",
+    text: "Enhance the appearance of everyday photos, profile pictures and product images.",
   },
   {
-    title: "Upscaling",
-    text: "Make small or low-resolution images larger and clearer.",
+    title: "Upscale images",
+    text: "Make smaller or low-resolution images larger while improving their appearance.",
   },
   {
-    title: "Custom backgrounds",
-    text: "Adjust the background of your image in the tool settings before you download it.",
+    title: "Customize backgrounds",
+    text: "Adjust the available background settings before downloading your enhanced image.",
   },
 ];
 
 const steps = [
   {
     title: "Upload your image",
-    text: "Choose a JPG, PNG or WebP photo from your device.",
+    text: "Select a JPG, PNG or WebP image from your device.",
   },
   {
-    title: "Adjust the settings",
-    text: "Choose your enhancement settings and customize the background if you need to.",
+    title: "Adjust enhancement settings",
+    text: "Choose the available enhancement options and customize the background if needed.",
   },
   {
-    title: "Compare and download",
-    text: "Check the result and download the enhanced image to use anywhere.",
+    title: "Preview and download",
+    text: "Review the enhanced result and download your improved image.",
   },
 ];
 
 const tips = [
-  "Start with the highest quality original you have. Enhancing a good photo gives better results than enhancing a tiny, heavily compressed one.",
-  "Small improvements usually look more natural than extreme changes.",
-  "Enhancement improves what is already in the photo. It cannot add detail that was never captured.",
-  "Enhance first, then resize or compress so the final file is the right size for your website or form.",
+  "Start with the highest-quality original image available. Very small or heavily compressed images may have limited improvement.",
+  "Use moderate enhancement settings for more natural-looking results.",
+  "Image enhancement can improve the appearance of existing details, but it cannot always recover details missing from the original photo.",
+  "Enhance your image first, then resize or compress it to meet your website or upload requirements.",
 ];
 
 function EnhanceGuide() {
@@ -43,18 +44,20 @@ function EnhanceGuide() {
     <section className="w-full bg-[#fff3ec] font-sans text-[#121212] pt-16 px-6">
       <div className="max-w-3xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-black mb-4">
-          Free Online Image Enhancer
+          How to Enhance Image Quality Online
         </h2>
 
         <p className="text-sm md:text-base text-[#555555] leading-relaxed mb-10">
-          Low-quality or small photos are easy to improve. The MeetTools Image
-          Enhancer helps you upscale and enhance your pictures online, adjust
-          the settings and customize the background, without installing any
-          software. Use it for profile photos, product images, social media
-          posts and everyday snapshots.
+          Improve image quality online with the free MeetTools Image Enhancer.
+          Upload a photo, adjust the available enhancement settings and
+          customize its background before downloading the result. You can use
+          the tool for profile pictures, product photos, social media images
+          and everyday photographs without installing desktop software.
         </p>
 
-        <h3 className="text-xl font-black mb-4">What you can improve</h3>
+        <h3 className="text-xl font-black mb-4">
+          What Can an Image Enhancer Improve?
+        </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-12">
           {improvements.map((item) => (
@@ -70,7 +73,9 @@ function EnhanceGuide() {
           ))}
         </div>
 
-        <h3 className="text-xl font-black mb-4">How to enhance an image</h3>
+        <h3 className="text-xl font-black mb-4">
+          How to Enhance an Image Online
+        </h3>
 
         <ol className="space-y-3 mb-12">
           {steps.map((step, index) => (
@@ -89,7 +94,9 @@ function EnhanceGuide() {
           ))}
         </ol>
 
-        <h3 className="text-xl font-black mb-4">Tips for better results</h3>
+        <h3 className="text-xl font-black mb-4">
+          Tips for Better Image Enhancement Results
+        </h3>
 
         <ul className="space-y-2 mb-6 list-disc pl-5 text-sm text-[#555555] leading-relaxed">
           {tips.map((tip) => (
@@ -98,14 +105,15 @@ function EnhanceGuide() {
         </ul>
 
         <p className="text-sm text-[#555555] leading-relaxed">
-          Need a smaller file after enhancing? Use our{" "}
+          Need to change your image dimensions or file size after enhancement?
+          Try our{" "}
           <Link
             href="/tools/resize"
             className="font-bold text-[#c2410c] underline underline-offset-2"
           >
-            free image resizer and compressor
+            free online image resizer
           </Link>{" "}
-          to change the size or convert to WebP.
+          to resize and prepare your image for websites, forms and social media.
         </p>
       </div>
     </section>
@@ -114,39 +122,39 @@ function EnhanceGuide() {
 
 const enhanceFaqs = [
   {
-    question: "Is the image enhancer free to use?",
+    question: "Is the MeetTools Image Enhancer free to use?",
     answer:
-      "Yes. The MeetTools Image Enhancer is free to use. A free account also lets you keep your files for later.",
+      "Yes. You can use the MeetTools Image Enhancer online without installing desktop software. Check the tool for any account or usage requirements.",
   },
   {
     question: "Which image formats can I enhance?",
     answer:
-      "Common formats such as JPG, PNG and WebP work best. Upload the highest quality version you have for the best result.",
+      "You can upload common image formats such as JPG, PNG and WebP. Use the highest-quality original image available for better results.",
   },
   {
-    question: "Will enhancing change my original image?",
+    question: "Will enhancing an image change my original file?",
     answer:
-      "No. Your original file stays untouched. You download the enhanced version as a new file.",
+      "The enhanced result is provided as a separate output file, so your original image remains unchanged.",
   },
   {
-    question: "Can I change the background of my image?",
+    question: "Can I customize the background of an image?",
     answer:
-      "Yes. The tool includes background options that you can adjust before downloading the enhanced image.",
+      "Yes. The tool provides background settings that you can adjust before downloading the enhanced result.",
   },
   {
-    question: "Can it fix a very blurry photo?",
+    question: "Can an image enhancer fix a very blurry photo?",
     answer:
-      "Enhancement can improve clarity and color, but it cannot recreate detail that was never captured. Very blurry photos will improve only a little.",
+      "Image enhancement may improve the appearance of a blurry photo, but it cannot always recover details that were not captured in the original image.",
   },
   {
-    question: "Can I resize or compress the image after enhancing it?",
+    question: "Can I resize or compress an image after enhancing it?",
     answer:
-      "Yes. Use the MeetTools Image Resizer to change the dimensions, set a target file size or convert to WebP or AVIF.",
+      "Yes. You can use the MeetTools Image Resizer to change image dimensions, adjust quality and prepare your image for uploading.",
   },
   {
-    question: "How long are my files stored?",
+    question: "How long are uploaded images stored?",
     answer:
-      "Files are processed on our servers and automatically deleted after 24 hours.",
+      "Uploaded files are automatically deleted after 24 hours.",
   },
 ];
 
